@@ -41,6 +41,7 @@ ARG TARGETARCH=amd64
 # The syncthing package creates its user. ffmpeg and icu-libs are needed by Jellyfin.
 # ca-certificates, curl and tzdata come from the base layer; curl is also used by the Tailscale service.
 RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban ffmpeg gcompat icu-libs jq logrotate openssl py3-jinja2 python3 rsyslog syncthing tzdata unzip
+RUN addgroup -S files && adduser -S -G files -h /data files
 
 RUN apk add --no-cache bash curl openrc \
     && mkdir -p /etc/pihole \
@@ -110,7 +111,7 @@ RUN chmod +x \
        /etc/s6-overlay/s6-rc.d/pihole-log/run \
        /etc/s6-overlay/s6-rc.d/pihole-cron/run \
     && mkdir -p /data /config /var/syncthing /var/lib/tailscale /var/log/tailscale /var/environment/global-env \
-    && chown syncthing:syncthing /var/syncthing
+    && chown files:files /var/syncthing
 
 EXPOSE 53/tcp 53/udp 80 443
 

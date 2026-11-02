@@ -2,10 +2,10 @@
 set -eu
 exec 2>&1
 
-mkdir -p /data/copyparty
+export HOME=/data/copyparty
 
 # Caddy serves copyparty at the root, so no --rp-loc prefix is needed.
 # Identity comes from the Tailscale-User-Login header that tailscale serve sets. copyparty only trusts it
 # from loopback (--xff-src defaults to 127.0.0.0/8), which is where Caddy connects from.
 export PYTHONPATH=/opt/copyparty
-exec python3 -m copyparty -i 127.0.0.1 -p 8081 --idp-h-usr Tailscale-User-Login --idp-h-grp X-Remote-Groups -v /data/copyparty:/:rwmda,@copyparty-admins:rw,*
+exec s6-setuidgid files python3 -m copyparty -i 127.0.0.1 -p 8081 --idp-h-usr Tailscale-User-Login --idp-h-grp X-Remote-Groups -v /data/copyparty:/:rwmda,@copyparty-admins:rw,*

@@ -90,7 +90,10 @@ else
     sed -i "s|<IsStartupWizardCompleted>[a-z]*</IsStartupWizardCompleted>|<IsStartupWizardCompleted>$WIZARD_DONE</IsStartupWizardCompleted>|" $SYSTEM_XML
 fi
 
-exec /opt/jellyfin/jellyfin \
+chown -R files:files "$JF_DATA"
+export HOME=$JF_DATA
+
+exec s6-setuidgid files /opt/jellyfin/jellyfin \
     --datadir $JF_DATA \
     --configdir $JF_CONFIG \
     --cachedir $JF_DATA/cache \

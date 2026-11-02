@@ -1,0 +1,1 @@
+/command/with-contenv /bin/sh -ec "mkdir -p /data/copyparty /data/jellyfin /var/syncthing; chown files:files /data; chown -R files:files /data/copyparty /data/jellyfin /var/syncthing"

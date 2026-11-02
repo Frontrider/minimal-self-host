@@ -1,7 +1,6 @@
 #!/command/with-contenv sh
+set -eu
 exec 2>&1
-chown -R syncthing:syncthing /var/syncthing
-chown syncthing:syncthing /data
 export HOME=/data
 
 if [ -f "/var/syncthing/config.xml" ]; then
@@ -9,10 +8,10 @@ if [ -f "/var/syncthing/config.xml" ]; then
   sed -i 's#/root/Sync#/var/syncthing/Sync#g' /var/syncthing/config.xml
   echo "syncthing config exists"
 else
-  s6-setuidgid syncthing syncthing generate --home /var/syncthing/
+  s6-setuidgid files syncthing generate --home /var/syncthing/
   echo "syncthing config generated"
 fi
 
 python3 /etc/s6-overlay/scripts/merge_xml.py /usr/local/etc/syncthing-default/config.xml /var/syncthing/config.xml || exit 1
 
-exec s6-setuidgid syncthing syncthing serve --no-restart --home=/var/syncthing --gui-address=unix:///tmp/st.sock --gui-apikey=1234 --skip-port-probing --unpaused
+exec s6-setuidgid files syncthing serve --no-restart --home=/var/syncthing --gui-address=unix:///tmp/st.sock --gui-apikey=1234 --skip-port-probing --unpaused
