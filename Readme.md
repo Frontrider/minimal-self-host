@@ -66,7 +66,6 @@ As long as a device is connected to your tailnet, it will get network level ad b
 Once you have those two set up, run docker compose up -d, and you can access everything on your tailnet.
 
 You can find the address to the machine on the machine list of your tailscale admin panel, or in the tailscale app for your platform.
-![img_2.png](img_2.png)
 ## Navigation:
 
 Every page has a dynamic sidebar added to them, that contains the links to every application.
