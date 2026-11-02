@@ -18,6 +18,10 @@ Tailscale was selected as the "connectivity" solution, because it is very easy t
 This is the biggest issue with self-hosting, having a secure way to access your services. Most solutions are cumbersome to set up, with a lot of configurations and knowledge required.
 Tailscale reduces it to one value.
 
+Treat the tailnet as a trusted area, and don't share it with people you don't fully trust.
+Use syncthing to share files with anyone outside your household, that is fast, easy-ish and secure.
+NEVER expose it to the public internet as it is provided, because it won't be secure. I will NOT be responsible for any data leak, loss, or compromise if you do so.
+
 You need to create a file named `.env` in the root of the project. You can rename/copy the `env` file and use it as a base.
 
 To start, you need a tailscale auth key, and set it in the env file as "LOCALHOST_TS_AUTH_KEY".
@@ -32,8 +36,6 @@ Authorization uses tailscale's identity headers, so you can just visit the pages
 
 This is the main and only security feature of this stack.
 If you don't know what you're doing, then this should be enough to keep your data safe.
-NEVER expose it to the public internet as is, because it won't be secure.
-
 
 I could not lower the barrier of entry any further for now.
 
