@@ -29,6 +29,9 @@ To start, you need a tailscale auth key, and set it in the env file as `LOCALHOS
 Instructions are here.
 https://tailscale.com/docs/features/access-control/auth-keys
 
+You also need tailscale installed on any machine you want to access the services from, and logged in with your account.
+So your pc, your phone, your tablet, etc.
+
 Then you have to set the `ADMIN_USER` variable to what you see in your tailscale account as your username.
 You can share the machine with others, and they won't have admin privileges.
 Everything is configured to treat them as regular users.
@@ -36,7 +39,7 @@ Everything is configured to treat them as regular users.
 Authorization uses tailscale's identity headers, so you can just visit the pages from your tailnet, and you will be logged in automatically.
 
 This is the main and only security feature of this stack.
-If you don't know what you're doing, then this should be enough to keep your data safe.
+If you don't know what you're doing, then don't change any of these settings.
 
 I could not lower the barrier of entry any further for now.
 
