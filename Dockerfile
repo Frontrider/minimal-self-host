@@ -42,6 +42,19 @@ ARG TARGETARCH=amd64
 # ca-certificates, curl and tzdata come from the base layer; curl is also used by the Tailscale service.
 RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban ffmpeg gcompat icu-libs jq logrotate openssl py3-jinja2 python3 rsyslog syncthing tzdata unzip
 
+RUN apk add --no-cache bash curl openrc \
+    && mkdir -p /etc/pihole \
+    && printf '[dns]\nupstreams = ["1.1.1.1", "1.0.0.1"]\n[webserver]\nport = "127.0.0.2:8082"\n' > /etc/pihole/pihole.toml \
+    && curl -fsSL https://install.pi-hole.net -o /tmp/pihole-install.sh \
+    && bash -ec ' \
+        SKIP_INSTALL=true source /tmp/pihole-install.sh --unattended; \
+        enable_service() { printf "Service enable deferred to s6: %s\n" "$1"; }; \
+        restart_service() { printf "Service startup deferred to s6: %s\n" "$1"; }; \
+        main --unattended' \
+    && rm /tmp/pihole-install.sh \
+    && install -m 644 /etc/.pihole/advanced/Templates/logrotate /etc/logrotate.d/pihole \
+    && setcap 'cap_net_bind_service,cap_net_raw,cap_chown+ep' /usr/bin/pihole-FTL
+
 COPY --from=base-build /s6root/ /
 COPY --from=base-build /usr/bin/tailscale /usr/bin/tailscale
 COPY --from=base-build /usr/sbin/tailscaled /usr/sbin/tailscaled
@@ -93,9 +106,12 @@ RUN chmod +x \
        /etc/s6-overlay/s6-rc.d/tailscale-log/run \
        /etc/s6-overlay/s6-rc.d/rsyslog/run \
        /etc/s6-overlay/s6-rc.d/logrotate/run \
+       /etc/s6-overlay/s6-rc.d/pihole/run \
+       /etc/s6-overlay/s6-rc.d/pihole-log/run \
+       /etc/s6-overlay/s6-rc.d/pihole-cron/run \
     && mkdir -p /data /config /var/syncthing /var/lib/tailscale /var/log/tailscale /var/environment/global-env \
     && chown syncthing:syncthing /var/syncthing
 
-EXPOSE 80 443
+EXPOSE 53/tcp 53/udp 80 443
 
 ENTRYPOINT ["/init"]

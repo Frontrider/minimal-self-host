@@ -1,0 +1,2 @@
+17 3 * * 0 /usr/local/bin/pihole updateGravity 2>&1 | logger -t pihole
+0 0 * * * /usr/local/bin/pihole flush once quiet 2>&1 | logger -t pihole

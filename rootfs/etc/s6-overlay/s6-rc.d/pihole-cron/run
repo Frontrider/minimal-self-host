@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+exec 2>&1
+until [ -s /etc/pihole/gravity.db ] && [ -S /dev/log ]; do sleep 1; done
+exec crond -f -d 8 -c /etc/pihole-cron

@@ -10,6 +10,7 @@ Included:
 - Jellyfin: watching videos is just better with it.
 - Copyparty: A very well-made and light file server/browser. The gui could use some work, but it is fast and more featureful than everything else I could find.
 - Syncthing: One of the best tools for the average person to send and receive files from friends and family.
+- PiHole: network level ad blocking.
 
 ## Tailscale
 
@@ -21,6 +22,9 @@ Tailscale reduces it to one value. I'm still concerned that it is *still* too mu
 Treat the tailnet as a trusted area, and don't share it with people you don't fully trust.
 Use syncthing to share files with anyone outside your household, that is fast, easy-ish and secure.
 NEVER expose it to the public internet as it is provided, because it won't be secure. I will NOT be responsible for any data leak, loss, or compromise if you do so.
+
+You will need to install the tailscale client for your platform, and log in with your account. You can find the client here:
+https://tailscale.com/download
 
 ## Configuration
 
@@ -47,10 +51,22 @@ If you don't know what you're doing, then don't change any of these settings.
 
 I could not lower the barrier of entry any further for now.
 
+### Ad blocking
+
+Pi hole is included in the stack, but it is not configured to be used as a DNS server for your tailnet.
+Everything is provided in this image, You can continue the setup from here.
+https://tailscale.com/docs/solutions/block-ads-all-devices-anywhere-using-raspberry-pi#step-4-set-raspberry-pi-as-the-dns-server-for-your-tailnet
+
+Also refer to the Pihole documentation for more information.
+https://docs.pi-hole.net/main/
+
+As long as a device is connected to your tailnet, it will get network level ad blocking. Yes, this means that it works on your phone when you're not home.
 ## Running
 
 Once you have those two set up, run docker compose up -d, and you can access everything on your tailnet.
 
+You can find the address to the machine on the machine list of your tailscale admin panel, or in the tailscale app for your platform.
+![img_2.png](img_2.png)
 ## Navigation:
 
 Every page has a dynamic sidebar added to them, that contains the links to every application.
@@ -77,3 +93,11 @@ The latter is appealing, because the tools are already here and I don't need to 
 
 I also want alternative connectivity solutions, tailscale can not be the only option.
 Syncthing was also selected to open up this possibility, restrict tailscale down to "have a reachable address for every service". 
+
+# Disclosure
+
+Yes, I did use an llm for this, because the number of files I needed to edit while still doing trial and error took too long.
+I'm also using it as a tool to combat my exhaustion. This version is the result of a few years of experimentation and I needed a bit of help to accelerate the final assembly.
+There are a lot of different decisions in here that no llm will ever give to you as an option.
+
+99% of this project is also repeated configuration, writing the same file over and over again is not work for a human.

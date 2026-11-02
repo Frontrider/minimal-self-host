@@ -27,6 +27,21 @@ services:
       caddy.2_handle_path.2_respond: '@syncthing_other "<html><body><h1>Unauthorized</h1><p>Syncthing is only available to the admin user.</p>{file./etc/caddy/menu.html}</body></html>" 403'
       caddy.2_handle_path.3_reverse_proxy: 'unix//tmp/st.sock'
       caddy.2_handle_path.3_reverse_proxy.header_up: 'Accept-Encoding identity'
+      caddy.3_redir: '/pihole /pihole/admin/ permanent'
+      caddy.@pihole_root.path: '/pihole/'
+      caddy.3_redir_1: '@pihole_root /pihole/admin/ permanent'
+      caddy.@pihole_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      caddy.@pihole_wrong_host.expression: '`{http.request.host} != ph(req, "file./var/environment/global-env/DOMAIN")`'
+      caddy.3_handle_path: '/pihole/*'
+      caddy.3_handle_path.0_respond: '@pihole_wrong_host "Forbidden" 403'
+      caddy.3_handle_path.0_forward_auth: '127.0.0.1:9099'
+      caddy.3_handle_path.0_forward_auth.uri: '/'
+      caddy.3_handle_path.1_header: '@pihole_other Content-Type "text/html; charset=utf-8"'
+      caddy.3_handle_path.2_respond: '@pihole_other "<html><body><h1>Unauthorized</h1><p>Pi-hole is only available to the admin user.</p>{file./etc/caddy/menu.html}</body></html>" 403'
+      caddy.3_handle_path.3_reverse_proxy: '127.0.0.2:8082'
+      caddy.3_handle_path.3_reverse_proxy.header_up: 'Accept-Encoding identity'
+      # Pi-hole's CSP otherwise blocks the injected sidebar script.
+      caddy.3_handle_path.4_header: '-Content-Security-Policy'
       caddy.5_redir: '/jellyfin /jellyfin/ permanent'
       # Landing page goes to SSO. Requests coming from the SSO page (its Referer contains RemoteAuth) are excluded so the browser doesn't loop back.
       caddy.@jellyfin_root.path: '/jellyfin/'
@@ -74,6 +89,7 @@ services:
       - syncthing_config:/var/syncthing
       # Jellyfin keeps its config, plugins, cache and logs here.
       - jellyfin_data:/data/jellyfin
+      - pihole_data:/etc/pihole
 
 networks:
   internal:
@@ -94,4 +110,6 @@ volumes:
   syncthing_config:
     driver: local
   jellyfin_data:
+    driver: local
+  pihole_data:
     driver: local

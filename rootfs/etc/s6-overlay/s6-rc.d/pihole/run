@@ -1,0 +1,41 @@
+#!/command/with-contenv bash
+set -eu
+exec 2>&1
+
+echo "Waiting for Tailscale to publish the node's domain"
+until [ -s /var/environment/global-env/DOMAIN ]; do sleep 1; done
+FTLCONF_webserver_domain=$(cat /var/environment/global-env/DOMAIN)
+export FTLCONF_webserver_domain
+
+# Tailscale userspace forwards ports to 127.0.0.1; use a different loopback address
+# so clients cannot reach the passwordless UI without going through Caddy.
+export FTLCONF_webserver_port=127.0.0.2:8082
+export FTLCONF_webserver_paths_prefix=/pihole
+export FTLCONF_webserver_api_password=''
+export FTLCONF_dns_listeningMode=ALL
+export FTLCONF_ntp_ipv4_active=false
+export FTLCONF_ntp_ipv6_active=false
+export FTLCONF_dhcp_active=false
+
+mkdir -p /etc/pihole /var/log/pihole /run/pihole
+install -m 644 /etc/.pihole/advanced/Templates/logrotate /etc/pihole/logrotate
+chown pihole:pihole /run/pihole
+
+# Clear passwords saved in the persistent volume; authentication belongs to Caddy.
+pihole-FTL --config webserver.api.pwhash '' >/dev/null
+pihole-FTL --config >/dev/null
+if [ "$(pihole-FTL --config dns.upstreams)" = '[]' ]; then
+    pihole-FTL --config dns.upstreams '["1.1.1.1", "1.0.0.1"]' >/dev/null
+fi
+
+if [ ! -f /etc/pihole/gravity.db ]; then
+    if [ ! -f /etc/pihole/adlists.list ]; then
+        printf '%s\n' 'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts' > /etc/pihole/adlists.list
+    fi
+    pihole -g
+else
+    /opt/pihole/gravity.sh --upgrade
+fi
+sh /opt/pihole/pihole-FTL-prestart.sh
+
+exec /command/s6-setuidgid pihole /usr/bin/pihole-FTL no-daemon
