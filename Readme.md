@@ -15,7 +15,8 @@ Included:
 
 Tailscale was selected as the "connectivity" solution, because it is very easy to set up, and use. It is also free for personal use.
 This is the biggest issue with self-hosting, having a secure way to access your services. Most solutions are cumbersome to set up, with a lot of configurations and knowledge required.
-Tailscale reduces it to one value.
+
+Tailscale reduces it to one value. I'm still concerned that it is *still* too much, but I can't think of a better solution for now.
 
 Treat the tailnet as a trusted area, and don't share it with people you don't fully trust.
 Use syncthing to share files with anyone outside your household, that is fast, easy-ish and secure.
@@ -31,6 +32,9 @@ https://tailscale.com/docs/features/access-control/auth-keys
 
 You also need tailscale installed on any machine you want to access the services from, and logged in with your account.
 So your pc, your phone, your tablet, etc.
+
+You also need to enable HTTPS within tailscale.
+https://tailscale.com/docs/how-to/set-up-https-certificates
 
 Then you have to set the `ADMIN_USER` variable to what you see in your tailscale account as your username.
 You can share the machine with others, and they won't have admin privileges.
