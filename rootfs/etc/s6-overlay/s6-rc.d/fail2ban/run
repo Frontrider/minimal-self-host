@@ -1,0 +1,5 @@
+#!/command/with-contenv sh
+exec 2>&1
+mkdir -p /var/run/fail2ban /var/log/caddy
+touch /var/log/caddy/access.log
+exec fail2ban-server -f -x start

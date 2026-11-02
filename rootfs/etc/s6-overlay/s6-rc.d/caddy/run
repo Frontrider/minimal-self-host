@@ -1,0 +1,10 @@
+#!/command/with-contenv sh
+exec 2>&1
+# Docker tag routing: caddy-docker-proxy reads the caddy.* labels of containers from the Docker socket.
+# DEBUG_MODE=true turns on Caddy's global debug option through the {$CADDY_GLOBAL_DEBUG} placeholder in the Caddyfile.
+export CADDY_GLOBAL_DEBUG=""
+if [ "${DEBUG_MODE:-false}" = "true" ]; then
+    export CADDY_GLOBAL_DEBUG=debug
+fi
+
+exec /bin/caddy docker-proxy --caddyfile-path /etc/caddy/Caddyfile

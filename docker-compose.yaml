@@ -1,0 +1,97 @@
+services:
+  core:
+    build: .
+    restart: always
+    hostname: localhost
+    ports:
+      - "1900:1900/udp"
+      - "8096:8096"
+    environment:
+      MAIL: ${LOCALHOST_MAIL}
+      TS_AUTH_KEY: ${LOCALHOST_TS_AUTH_KEY}
+      XDG_DATA_HOME: /var/lib/caddy
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+    networks:
+      - internal
+    labels:
+      # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
+      caddy: ':90'
+      caddy.0_redir: '/syncthing /syncthing/ permanent'
+      # Every protected route first asks the forward auth site (Caddyfile) whether Tailscale sent a user header.
+      caddy.2_handle_path: '/syncthing/*'
+      caddy.2_handle_path.0_forward_auth: '127.0.0.1:9099'
+      caddy.2_handle_path.0_forward_auth.uri: '/'
+      # Only the ADMIN_USER login reaches Syncthing. Everyone else gets an unauthorized page that still includes the sidebar.
+      caddy.@syncthing_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      caddy.2_handle_path.1_header: '@syncthing_other Content-Type "text/html; charset=utf-8"'
+      caddy.2_handle_path.2_respond: '@syncthing_other "<html><body><h1>Unauthorized</h1><p>Syncthing is only available to the admin user.</p>{file./etc/caddy/menu.html}</body></html>" 403'
+      caddy.2_handle_path.3_reverse_proxy: 'unix//tmp/st.sock'
+      caddy.2_handle_path.3_reverse_proxy.header_up: 'Accept-Encoding identity'
+      caddy.5_redir: '/jellyfin /jellyfin/ permanent'
+      # Landing page goes to SSO. Requests coming from the SSO page (its Referer contains RemoteAuth) are excluded so the browser doesn't loop back.
+      caddy.@jellyfin_root.path: '/jellyfin/'
+      caddy.@jellyfin_root.not.header: 'Referer *RemoteAuth*'
+      caddy.4_redir: '@jellyfin_root /jellyfin/sso/RemoteAuth/Login'
+      # Jellyfin serves under its BaseUrl (/jellyfin, set in network.xml), so the prefix is passed through, not stripped.
+      caddy.5_handle: '/jellyfin/*'
+      caddy.5_handle.0_forward_auth: '127.0.0.1:9099'
+      caddy.5_handle.0_forward_auth.uri: '/'
+      # Caddy sets the identity headers Jellyfin's Remote Auth plugin reads, and the secret it requires.
+      # Groups come only from Caddy, so a client cannot send its own. The LOCALHOST_MAIL login gets the admin group.
+      caddy.@jellyfin_admin.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      caddy.5_handle.2_request_header: 'X-Remote-Auth-User {http.request.header.Tailscale-User-Login}'
+      caddy.5_handle.3_request_header: 'X-Remote-Auth-Email {http.request.header.Tailscale-User-Login}'
+      caddy.5_handle.4_request_header: 'X-Remote-Auth-Name {http.request.header.Tailscale-User-Name}'
+      caddy.5_handle.5_request_header: 'X-Remote-Auth-Secret {file./data/remoteauth_secret}'
+      caddy.5_handle.6_request_header: '@jellyfin_admin X-Remote-Auth-Groups jellyfin-admins'
+      caddy.5_handle.7_reverse_proxy: '127.0.0.1:8096'
+      caddy.5_handle.7_reverse_proxy.header_up: 'Accept-Encoding identity'
+      # copyparty takes the root; it is the catch-all after the Jellyfin path above.
+      # Groups come only from Caddy: the header is cleared first, then set for the ADMIN_USER login.
+      caddy.@copyparty_admin.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      caddy.7_handle.0_forward_auth: '127.0.0.1:9099'
+      caddy.7_handle.0_forward_auth.uri: '/'
+      caddy.7_handle.1_reverse_proxy: '127.0.0.1:8081'
+      caddy.7_handle.1_reverse_proxy.header_up: 'Accept-Encoding identity'
+      caddy.@copyparty_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      caddy.7_handle.2_request_header: '@copyparty_other -X-Remote-Groups'
+      caddy.7_handle.3_request_header: '@copyparty_admin X-Remote-Groups copyparty-admins'
+      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
+      # Copyparty's nonce-based CSP blocks the injected menu script, so the header is dropped on this route.
+      caddy.7_header: '-Content-Security-Policy'
+      caddy.7_replace.match.header: 'Content-Type text/html*'
+      caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
+    volumes:
+      # caddy-docker-proxy watches containers for caddy.* labels.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - caddy_data:/var/lib/caddy
+      - caddy_config:/config
+      - ./logs:/var/log
+      - data:/data
+      - data:/var/www/data/:rw
+      - tailscale_state:/var/lib/tailscale
+      # Syncthing keeps its config (including the usage-reporting consent) here.
+      - syncthing_config:/var/syncthing
+      # Jellyfin keeps its config, plugins, cache and logs here.
+      - jellyfin_data:/data/jellyfin
+
+networks:
+  internal:
+    name: localhost_internal
+  external:
+    name: localhost_external
+    driver: bridge
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  data:
+    driver: local
+  tailscale_state:
+    driver: local
+  syncthing_config:
+    driver: local
+  jellyfin_data:
+    driver: local

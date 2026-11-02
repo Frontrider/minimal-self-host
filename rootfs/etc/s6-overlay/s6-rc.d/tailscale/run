@@ -1,0 +1,24 @@
+#!/command/with-contenv sh
+exec 2>&1
+# Userspace networking works without /dev/net/tun.
+mkdir -p /var/run/tailscale
+(
+  until tailscale status >/dev/null 2>&1 || [ $? -eq 1 ]; do sleep 1; done
+  if [ -n "$TS_AUTH_KEY" ]; then
+    tailscale up --auth-key="$TS_AUTH_KEY" --ssh=false
+  fi
+  # Publish the MagicDNS name (without the trailing dot) for other services once the node has one.
+  until DOMAIN="$(tailscale status --self --peers=false --json 2>/dev/null | sed -n 's/.*"DNSName": *"\([^"]*\)".*/\1/p' | head -n1)"; [ -n "$DOMAIN" ]; do sleep 2; done
+  DOMAIN="${DOMAIN%.}"
+  printf '%s' "$DOMAIN" > /var/environment/global-env/DOMAIN
+
+  # Apply /etc/tailscale/serve.json (ServeConfig format, "__DOMAIN__" is replaced with the node name).
+  # The LocalAPI replaces the whole serve config, so an image without the file keeps the node's config.
+  if [ -f /etc/tailscale/serve.json ]; then
+    sed "s/__DOMAIN__/$DOMAIN/g" /etc/tailscale/serve.json \
+      | curl -fsS --unix-socket /var/run/tailscale/tailscaled.sock -H 'Sec-Tailscale: localapi' \
+          -X POST --data-binary @- http://local-tailscaled.sock/localapi/v0/serve-config
+  fi
+  tailscale set --shields-up=false
+) &
+exec tailscaled --state=/var/lib/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock --tun=userspace-networking

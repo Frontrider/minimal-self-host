@@ -1,0 +1,13 @@
+<configuration version="52">
+
+    <gui enabled="true" tls="false" sendBasicAuthPrompt="false">
+        <address>unix:///tmp/st.sock</address>
+        <unixSocketPermissions>0660</unixSocketPermissions>
+        <metricsWithoutAuth>false</metricsWithoutAuth>
+        <apikey>1234</apikey>
+        <theme>default</theme>
+        <insecureAdminAccess>true</insecureAdminAccess>
+        <sessionCookieDurationS>604800</sessionCookieDurationS>
+        <sessionCookiePath>/</sessionCookiePath>
+    </gui>
+</configuration>

@@ -1,0 +1,4 @@
+#!/command/with-contenv sh
+mkdir -p /var/log/caddy
+until [ -S /dev/log ]; do sleep 0.1; done
+exec logger -t caddy

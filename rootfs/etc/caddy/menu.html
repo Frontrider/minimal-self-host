@@ -1,0 +1,46 @@
+<script>
+    (function () {
+        // Built outside <body> so apps that clear and re-render the body (e.g. Jellyfin) keep the menu.
+        const host = document.createElement("div");
+        host.id = "site-menu-host";
+        host.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;z-index:2147483647;";
+        document.documentElement.appendChild(host);
+        const root = host.attachShadow({ mode: "closed" });
+
+        const style = document.createElement("style");
+        style.textContent = "#site-menu-toggle{position:fixed;top:50%;left:0;transform:translateY(-50%);z-index:2147483647;background:#222;color:#fff;border:0;border-radius:0 6px 6px 0;height:80px;padding:0 8px;font-size:20px;display:flex;align-items:center;cursor:pointer;box-shadow:2px 0 6px rgba(0,0,0,.3)}#site-menu{position:fixed;top:0;left:0;height:100%;width:240px;box-sizing:border-box;padding-top:56px;background:#222;font-family:sans-serif;transform:translateX(-100%);transition:transform .25s;z-index:2147483646;box-shadow:2px 0 10px rgba(0,0,0,.4)}#site-menu.open{transform:none}#site-menu a{display:block;padding:12px 20px;color:#fff;text-decoration:none}#site-menu a:hover{background:#444}#site-menu-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .25s;z-index:2147483645}#site-menu-overlay.open{opacity:1;pointer-events:auto}";
+        root.appendChild(style);
+
+        const toggle = document.createElement("button");
+        toggle.id = "site-menu-toggle";
+        toggle.type = "button";
+        toggle.innerHTML = "&#9776;";
+
+        const overlay = document.createElement("div");
+        overlay.id = "site-menu-overlay";
+
+        const nav = document.createElement("nav");
+        nav.id = "site-menu";
+        nav.innerHTML = `<a href="/syncthing/">Syncthing</a>
+<a href="/">Files</a>
+<a href="/jellyfin/">Jellyfin</a>`;
+
+        function setOpen(open) {
+            nav.classList.toggle("open", open);
+            overlay.classList.toggle("open", open);
+            toggle.style.display = open ? "none" : "";
+        }
+
+        toggle.onclick = function () {
+            setOpen(true);
+        };
+
+        overlay.onclick = function () {
+            setOpen(false);
+        };
+
+        root.appendChild(overlay);
+        root.appendChild(nav);
+        root.appendChild(toggle);
+    })();
+</script>
