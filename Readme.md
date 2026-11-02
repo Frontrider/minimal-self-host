@@ -11,10 +11,9 @@ Included:
 - Copyparty: A very well-made and light file server/browser. The gui could use some work, but it is fast and more featureful than everything else I could find.
 - Syncthing: One of the best tools for the average person to send and receive files from friends and family.
 
+## Tailscale
 
-## Configuration
-
-Tailscale was selected as the "connectivity" solution, because it is very easy to set up, and use. It is also free for personal use. 
+Tailscale was selected as the "connectivity" solution, because it is very easy to set up, and use. It is also free for personal use.
 This is the biggest issue with self-hosting, having a secure way to access your services. Most solutions are cumbersome to set up, with a lot of configurations and knowledge required.
 Tailscale reduces it to one value.
 
@@ -22,9 +21,11 @@ Treat the tailnet as a trusted area, and don't share it with people you don't fu
 Use syncthing to share files with anyone outside your household, that is fast, easy-ish and secure.
 NEVER expose it to the public internet as it is provided, because it won't be secure. I will NOT be responsible for any data leak, loss, or compromise if you do so.
 
+## Configuration
+
 You need to create a file named `.env` in the root of the project. You can rename/copy the `env` file and use it as a base.
 
-To start, you need a tailscale auth key, and set it in the env file as "LOCALHOST_TS_AUTH_KEY".
+To start, you need a tailscale auth key, and set it in the env file as `LOCALHOST_TS_AUTH_KEY`.
 Instructions are here.
 https://tailscale.com/docs/features/access-control/auth-keys
 
@@ -65,3 +66,7 @@ NOT a social media solution. Only a private application that works peer to peer,
 
 I'm either eying jami web (needs testing), or I have an internal experiment that sends them over syncthing as files. 
 The latter is appealing, because the tools are already here and I don't need to set up any additional channels between each node. 
+
+
+I also want alternative connectivity solutions, tailscale can not be the only option.
+Syncthing was also selected to open up this possibility, restrict tailscale down to "have a reachable address for every service". 
