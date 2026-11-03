@@ -69,6 +69,7 @@ You can find the address to the machine on the machine list of your tailscale ad
 ## Navigation:
 
 Every page has a dynamic sidebar added to them, that contains the links to every application.
+
 ![img_1.png](img_1.png)
 ![img.png](img.png)
 You can use this to navigate.
@@ -88,7 +89,6 @@ NOT a social media solution. Only a private application that works peer to peer,
 
 I'm either eying jami web (needs testing), or I have an internal experiment that sends them over syncthing as files. 
 The latter is appealing, because the tools are already here and I don't need to set up any additional channels between each node. 
-
 
 I also want alternative connectivity solutions, tailscale can not be the only option.
 Syncthing was also selected to open up this possibility, restrict tailscale down to "have a reachable address for every service". 
