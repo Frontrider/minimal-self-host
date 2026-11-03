@@ -92,6 +92,7 @@ The latter is appealing, because the tools are already here and I don't need to 
 
 I also want alternative connectivity solutions, tailscale can not be the only option.
 Syncthing was also selected to open up this possibility, restrict tailscale down to "have a reachable address for every service". 
+I'm looking at the yggdrasil network for that.
 
 # Disclosure
 
