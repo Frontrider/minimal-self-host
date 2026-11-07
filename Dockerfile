@@ -56,7 +56,7 @@ RUN set -eux; \
 
 FROM alpine:3.22 AS core
 LABEL authors="frontrider"
-RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban jq logrotate openssl rsyslog tzdata unzip
+RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban inotify-tools jq logrotate openssl rsyslog tzdata unzip
 RUN addgroup -S -g 1000 files && adduser -S -u 1000 -G files -h /data files
 COPY --from=base-build /s6root/ /
 
