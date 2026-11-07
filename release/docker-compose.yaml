@@ -1,8 +1,6 @@
 services:
   core:
-    build:
-      context: .
-      target: core
+    image: ghcr.io/frontrider/minimal-self-host:0.0.3
     restart: always
     hostname: localhost
     environment:
