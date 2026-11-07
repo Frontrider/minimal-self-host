@@ -77,7 +77,7 @@ services:
       - core_state:/var/lib/localhost
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:0.0.7
+    image: ghcr.io/frontrider/app-manager:0.0.11
     restart: unless-stopped
     networks:
       - internal
