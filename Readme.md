@@ -28,7 +28,7 @@ https://tailscale.com/download
 
 ## Configuration
 
-You need to create a file named `.env` in the root of the project. You can rename/copy the `env` file and use it as a base.
+You need to create a file named `.env` in the root of the project. You can rename/copy the `release/env` file and use it as a base.
 
 To start, you need a tailscale auth key, and set it in the env file as `LOCALHOST_TS_AUTH_KEY`.
 Instructions are here.

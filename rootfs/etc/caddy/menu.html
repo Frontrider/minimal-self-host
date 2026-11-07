@@ -21,10 +21,30 @@
 
         const nav = document.createElement("nav");
         nav.id = "site-menu";
-        nav.innerHTML = `<a href="/syncthing/">Syncthing</a>
-<a href="/">Files</a>
-<a href="/jellyfin/">Jellyfin</a>
-<a href="/pihole/admin/">Pi-hole</a>`;
+        // Paths served by the core image, always listed; other links come from /sidebar.
+        [
+            { name: "Home", href: "/" },
+            { name: "Pi-hole", href: "/pihole/admin/" },
+            { name: "Users", href: "/users" }
+        ].forEach(function (item) {
+            const link = document.createElement("a");
+            link.href = item.href;
+            link.textContent = item.name;
+            nav.appendChild(link);
+        });
+
+        // Links come from service-manager's /sidebar JSON, so the list stays current.
+        fetch("/sidebar", { credentials: "same-origin" })
+            .then(function (res) { return res.ok ? res.json() : []; })
+            .then(function (items) {
+                items.forEach(function (item) {
+                    const link = document.createElement("a");
+                    link.href = item.href;
+                    link.textContent = item.name;
+                    nav.appendChild(link);
+                });
+            })
+            .catch(function () {});
 
         function setOpen(open) {
             nav.classList.toggle("open", open);

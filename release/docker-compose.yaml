@@ -1,0 +1,194 @@
+services:
+  core:
+    build:
+      context: .
+      target: core
+    restart: always
+    hostname: localhost
+    environment:
+      MAIL: ${LOCALHOST_MAIL}
+      TS_AUTH_KEY: ${LOCALHOST_TS_AUTH_KEY}
+      XDG_DATA_HOME: /var/lib/caddy
+      DEBUG_MODE: ${DEBUG_MODE:-false}
+      # Initial LLDAP admin password, also used by Authelia to bind to LDAP.
+      LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
+      # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
+      CORE_INTERNAL_IP: 172.30.53.2
+    networks:
+      internal:
+        ipv4_address: 172.30.53.2
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2019/config/ >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    labels:
+      # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
+      caddy: ':90'
+      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
+      caddy.7_replace.match.header: 'Content-Type text/html*'
+      caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
+      # The sidebar menu's app list comes live from service-manager, which renders it as an HTML fragment.
+      caddy.10_handle: '/sidebar*'
+      caddy.10_handle.0_forward_auth: '127.0.0.1:9091'
+      caddy.10_handle.0_forward_auth.uri: '/auth/api/authz/forward-auth'
+      caddy.10_handle.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
+      caddy.10_handle.1_reverse_proxy: 'service-manager:8080'
+      # Authelia's login portal and forward-auth API live under /auth.
+      caddy.9_handle: '/auth/*'
+      caddy.9_handle.0_reverse_proxy: '127.0.0.1:9091'
+      # /users shows LLDAP in an iframe. LLDAP is served on its own tailnet port (8443) because its UI needs root-level paths.
+      # No forward auth here: LLDAP's own login is the only sign-in.
+      caddy.8_handle.0_header: 'Content-Type "text/html; charset=utf-8"'
+      caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"https://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
+      caddy.8_handle: '/users*'
+      # Pi-hole's admin UI is only reachable through Caddy, under /pihole, and only for the admin user.
+      caddy.3_redir: '/pihole /pihole/admin/ permanent'
+      caddy.@pihole_root.path: '/pihole/'
+      caddy.3_redir_1: '@pihole_root /pihole/admin/ permanent'
+      # Authelia sends Remote-Groups as a comma-separated list; match lldap_admin as a whole entry.
+      caddy.@pihole_other.not.header_regexp: 'Remote-Groups (^|,)lldap_admin(,|\z)'
+      caddy.@pihole_wrong_host.expression: '`{http.request.host} != ph(req, "file./var/environment/global-env/DOMAIN")`'
+      caddy.3_handle_path: '/pihole/*'
+      caddy.3_handle_path.0_forward_auth: '127.0.0.1:9091'
+      caddy.3_handle_path.0_forward_auth.uri: '/auth/api/authz/forward-auth'
+      caddy.3_handle_path.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
+      caddy.3_handle_path.1_respond: '@pihole_wrong_host "Forbidden" 403'
+      caddy.3_handle_path.2_header: '@pihole_other Content-Type "text/html; charset=utf-8"'
+      caddy.3_handle_path.3_respond: '@pihole_other "<html><body><h1>Unauthorized</h1><p>Pi-hole is only available to the lldap_admin group.</p>{file./etc/caddy/menu.html}</body></html>" 403'
+      caddy.3_handle_path.4_reverse_proxy: '127.0.0.2:8082'
+      caddy.3_handle_path.4_reverse_proxy.header_up: 'Accept-Encoding identity'
+      # Pi-hole sees the path without /pihole, so its redirects must be prefixed again.
+      caddy.3_handle_path.4_reverse_proxy.header_down: 'Location "^/" "/pihole/"'
+      caddy.3_handle_path.5_header: '-Content-Security-Policy'
+    volumes:
+      # caddy-docker-proxy watches containers for caddy.* labels.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - caddy_data:/var/lib/caddy
+      - caddy_config:/config
+      - ./logs/caddy:/var/log/caddy
+      - ./logs/tailscale:/var/log/tailscale
+      - ./logs/fail2ban:/var/log/fail2ban
+      - ./logs/pihole:/var/log/pihole
+      - pihole_data:/etc/pihole
+      - tailscale_state:/var/lib/tailscale
+      # Core prepares shared directories before the apps start.
+      - data:/data
+      - core_state:/var/lib/localhost
+      - global_env:/var/environment/global-env
+  app-manager:
+    image: ghcr.io/frontrider/app-manager:0.0.7
+    restart: unless-stopped
+    networks:
+      - internal
+    labels:
+      caddy: "${CADDY_SITE:-:90}"
+      caddy_ingress_network: "${CADDY_NETWORK:-localhost_internal}"
+      # The root catch-all follows the other applications' path handlers.
+      # Explicit rewrite avoids checking for PHP files in Caddy's container.
+      caddy.99_handle.0_rewrite: "* /index.php"
+      caddy.99_handle.1_reverse_proxy: "{{upstreams 9000}}"
+      caddy.99_handle.1_reverse_proxy.transport: fastcgi
+      caddy.99_handle.1_reverse_proxy.transport.root: /var/www/html/public
+      caddy.99_handle.1_reverse_proxy.transport.split: .php
+      caddy.99_handle.1_reverse_proxy.transport.capture_stderr: ""
+      caddy.99_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+      # Public endpoint; authentication is handled by the application.
+      caddy.1_handle: "/sidebar"
+      caddy.1_handle.0_rewrite: "* /index.php"
+      caddy.1_handle.1_reverse_proxy: "{{upstreams 9000}}"
+      caddy.1_handle.1_reverse_proxy.transport: fastcgi
+      caddy.1_handle.1_reverse_proxy.transport.root: /var/www/html/public
+      caddy.1_handle.1_reverse_proxy.transport.split: .php
+      caddy.1_handle.1_reverse_proxy.transport.capture_stderr: ""
+      caddy.1_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+    environment:
+      CI_ENVIRONMENT: "${CI_ENVIRONMENT:-development}"
+      app_baseURL: "${APP_BASE_URL:-}"
+      DOMAIN_DIRECTORY: /var/environment/global-env
+      APP_SCHEME: "${APP_SCHEME:-https}"
+      # Resolve only the Caddy container's address on the shared network.
+      CADDY_PROXY_HOST: "${CADDY_PROXY_HOST:-core}"
+      app_indexPage: ""
+      # Set COOKIE_SECURE=true when Caddy serves HTTPS.
+      # For HTTP-only deployments set FASTCGI_HTTPS=off and COOKIE_SECURE=false.
+      cookie_secure: "${COOKIE_SECURE:-true}"
+      cookie_httponly: "true"
+      cookie_samesite: Lax
+      session_driver: 'CodeIgniter\Session\Handlers\FileHandler'
+      session_savePath: /var/www/html/writable/session
+      session_expiration: "${SESSION_LIFETIME:-3600}"
+      session_regenerateDestroy: "true"
+
+      # Bind directly as the user signing in to the existing LLDAP provider.
+      ldap_uri: "${LDAP_URI:-ldap://core:3890}"
+      ldap_userBaseDN: "${LDAP_USER_BASE_DN:-ou=people,dc=example,dc=com}"
+      ldap_groupBaseDN: "${LDAP_GROUP_BASE_DN:-ou=groups,dc=example,dc=com}"
+      ldap_userAttribute: "${LDAP_USER_ATTRIBUTE:-uid}"
+      ldap_adminGroup: "${LDAP_ADMIN_GROUP:-lldap_admin}"
+      # Default LLDAP uses plain LDAP; keep its network isolated or configure TLS.
+      ldap_startTLS: "${LDAP_START_TLS:-false}"
+      ldap_timeout: "${LDAP_TIMEOUT:-5}"
+      ldap_sessionLifetime: "${SESSION_LIFETIME:-3600}"
+
+      # singleton/<category>/<app>: one running app per category.
+      # standard categories have no exclusivity limit.
+      APPS_DIR: /apps
+      DOCKER_BIN: /usr/local/bin/docker
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Passed to each app's own Compose library-setup service.
+      JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
+      KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
+    volumes:
+      - type: bind
+        # Startup grants PHP workers access to the socket's detected group.
+        # Socket access grants host control.
+        source: "${DOCKER_SOCKET:-/var/run/docker.sock}"
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+      - app-manager-data:/var/www/html/writable
+      - type: volume
+        source: global_env
+        target: /var/environment/global-env
+        read_only: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET
+          cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+networks:
+  internal:
+    name: localhost_internal
+    ipam:
+      config:
+        - subnet: 172.30.53.0/24
+  external:
+    name: localhost_external
+    driver: bridge
+
+volumes:
+  app-manager-data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  data:
+    name: localhost_data
+    driver: local
+  tailscale_state:
+    driver: local
+  global_env:
+    name: localhost_global_env
+    driver: local
+  core_state:
+    driver: local
+  pihole_data:
+    driver: local

@@ -1,1 +1,1 @@
-/command/with-contenv /bin/sh -ec "mkdir -p /data/copyparty /data/jellyfin /var/syncthing; chown files:files /data; chown -R files:files /data/copyparty /data/jellyfin /var/syncthing"
+/command/with-contenv /bin/sh -ec "mkdir -p /data/copyparty /data/videos /data/books /var/lib/localhost; chown -R files:files /data; chmod -R u+rwX,g+rwX,o+rX /data"

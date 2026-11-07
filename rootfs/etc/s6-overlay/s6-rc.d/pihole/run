@@ -28,6 +28,9 @@ if [ "$(pihole-FTL --config dns.upstreams)" = '[]' ]; then
     pihole-FTL --config dns.upstreams '["1.1.1.1", "1.0.0.1"]' >/dev/null
 fi
 
+# Resolves the node's domain to core's internal address for containers that use this resolver.
+pihole-FTL --config dns.hosts "[\"${CORE_INTERNAL_IP} ${FTLCONF_webserver_domain}\"]" >/dev/null
+
 if [ ! -f /etc/pihole/gravity.db ]; then
     if [ ! -f /etc/pihole/adlists.list ]; then
         printf '%s\n' 'https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts' > /etc/pihole/adlists.list

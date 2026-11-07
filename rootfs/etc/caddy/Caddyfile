@@ -21,15 +21,3 @@ http://:8080 {
     respond 404
 }
 
-# Forward auth endpoint for Tailscale identity. Tailscale serve sets Tailscale-User-Login on every request
-# it proxies, overwriting any client value. Routes in the core labels use it with:
-#   forward_auth 127.0.0.1:9099 { uri / }
-http://127.0.0.1:9099 {
-    @tailscale_user header Tailscale-User-Login *
-    handle @tailscale_user {
-        header Tailscale-User-Login {http.request.header.Tailscale-User-Login}
-        respond 200
-    }
-    respond 401
-}
-

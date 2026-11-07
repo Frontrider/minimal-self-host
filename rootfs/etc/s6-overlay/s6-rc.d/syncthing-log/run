@@ -1,4 +1,0 @@
-#!/command/with-contenv sh
-mkdir -p /var/log/syncthing
-until [ -S /dev/log ]; do sleep 0.1; done
-exec logger -t syncthing

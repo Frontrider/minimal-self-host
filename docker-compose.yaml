@@ -1,115 +1,194 @@
 services:
   core:
-    build: .
+    build:
+      context: .
+      target: core
     restart: always
     hostname: localhost
-    ports:
-      - "1900:1900/udp"
-      - "8096:8096"
     environment:
       MAIL: ${LOCALHOST_MAIL}
       TS_AUTH_KEY: ${LOCALHOST_TS_AUTH_KEY}
       XDG_DATA_HOME: /var/lib/caddy
       DEBUG_MODE: ${DEBUG_MODE:-false}
+      # Initial LLDAP admin password, also used by Authelia to bind to LDAP.
+      LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
+      # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
+      CORE_INTERNAL_IP: 172.30.53.2
     networks:
-      - internal
+      internal:
+        ipv4_address: 172.30.53.2
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2019/config/ >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     labels:
       # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
       caddy: ':90'
-      caddy.0_redir: '/syncthing /syncthing/ permanent'
-      # Every protected route first asks the forward auth site (Caddyfile) whether Tailscale sent a user header.
-      caddy.2_handle_path: '/syncthing/*'
-      caddy.2_handle_path.0_forward_auth: '127.0.0.1:9099'
-      caddy.2_handle_path.0_forward_auth.uri: '/'
-      # Only the ADMIN_USER login reaches Syncthing. Everyone else gets an unauthorized page that still includes the sidebar.
-      caddy.@syncthing_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
-      caddy.2_handle_path.1_header: '@syncthing_other Content-Type "text/html; charset=utf-8"'
-      caddy.2_handle_path.2_respond: '@syncthing_other "<html><body><h1>Unauthorized</h1><p>Syncthing is only available to the admin user.</p>{file./etc/caddy/menu.html}</body></html>" 403'
-      caddy.2_handle_path.3_reverse_proxy: 'unix//tmp/st.sock'
-      caddy.2_handle_path.3_reverse_proxy.header_up: 'Accept-Encoding identity'
+      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
+      caddy.7_replace.match.header: 'Content-Type text/html*'
+      caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
+      # The sidebar menu's app list comes live from service-manager, which renders it as an HTML fragment.
+      caddy.10_handle: '/sidebar*'
+      caddy.10_handle.0_forward_auth: '127.0.0.1:9091'
+      caddy.10_handle.0_forward_auth.uri: '/auth/api/authz/forward-auth'
+      caddy.10_handle.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
+      caddy.10_handle.1_reverse_proxy: 'service-manager:8080'
+      # Authelia's login portal and forward-auth API live under /auth.
+      caddy.9_handle: '/auth/*'
+      caddy.9_handle.0_reverse_proxy: '127.0.0.1:9091'
+      # /users shows LLDAP in an iframe. LLDAP is served on its own tailnet port (8443) because its UI needs root-level paths.
+      # No forward auth here: LLDAP's own login is the only sign-in.
+      caddy.8_handle.0_header: 'Content-Type "text/html; charset=utf-8"'
+      caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"https://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
+      caddy.8_handle: '/users*'
+      # Pi-hole's admin UI is only reachable through Caddy, under /pihole, and only for the admin user.
       caddy.3_redir: '/pihole /pihole/admin/ permanent'
       caddy.@pihole_root.path: '/pihole/'
       caddy.3_redir_1: '@pihole_root /pihole/admin/ permanent'
-      caddy.@pihole_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
+      # Authelia sends Remote-Groups as a comma-separated list; match lldap_admin as a whole entry.
+      caddy.@pihole_other.not.header_regexp: 'Remote-Groups (^|,)lldap_admin(,|\z)'
       caddy.@pihole_wrong_host.expression: '`{http.request.host} != ph(req, "file./var/environment/global-env/DOMAIN")`'
       caddy.3_handle_path: '/pihole/*'
-      caddy.3_handle_path.0_respond: '@pihole_wrong_host "Forbidden" 403'
-      caddy.3_handle_path.0_forward_auth: '127.0.0.1:9099'
-      caddy.3_handle_path.0_forward_auth.uri: '/'
-      caddy.3_handle_path.1_header: '@pihole_other Content-Type "text/html; charset=utf-8"'
-      caddy.3_handle_path.2_respond: '@pihole_other "<html><body><h1>Unauthorized</h1><p>Pi-hole is only available to the admin user.</p>{file./etc/caddy/menu.html}</body></html>" 403'
-      caddy.3_handle_path.3_reverse_proxy: '127.0.0.2:8082'
-      caddy.3_handle_path.3_reverse_proxy.header_up: 'Accept-Encoding identity'
-      # Pi-hole's CSP otherwise blocks the injected sidebar script.
-      caddy.3_handle_path.4_header: '-Content-Security-Policy'
-      caddy.5_redir: '/jellyfin /jellyfin/ permanent'
-      # Landing page goes to SSO. Requests coming from the SSO page (its Referer contains RemoteAuth) are excluded so the browser doesn't loop back.
-      caddy.@jellyfin_root.path: '/jellyfin/'
-      caddy.@jellyfin_root.not.header: 'Referer *RemoteAuth*'
-      caddy.4_redir: '@jellyfin_root /jellyfin/sso/RemoteAuth/Login'
-      # Jellyfin serves under its BaseUrl (/jellyfin, set in network.xml), so the prefix is passed through, not stripped.
-      caddy.5_handle: '/jellyfin/*'
-      caddy.5_handle.0_forward_auth: '127.0.0.1:9099'
-      caddy.5_handle.0_forward_auth.uri: '/'
-      # Caddy sets the identity headers Jellyfin's Remote Auth plugin reads, and the secret it requires.
-      # Groups come only from Caddy, so a client cannot send its own. The LOCALHOST_MAIL login gets the admin group.
-      caddy.@jellyfin_admin.header: 'Tailscale-User-Login ${ADMIN_USER}'
-      caddy.5_handle.2_request_header: 'X-Remote-Auth-User {http.request.header.Tailscale-User-Login}'
-      caddy.5_handle.3_request_header: 'X-Remote-Auth-Email {http.request.header.Tailscale-User-Login}'
-      caddy.5_handle.4_request_header: 'X-Remote-Auth-Name {http.request.header.Tailscale-User-Name}'
-      caddy.5_handle.5_request_header: 'X-Remote-Auth-Secret {file./data/remoteauth_secret}'
-      caddy.5_handle.6_request_header: '@jellyfin_admin X-Remote-Auth-Groups jellyfin-admins'
-      caddy.5_handle.7_reverse_proxy: '127.0.0.1:8096'
-      caddy.5_handle.7_reverse_proxy.header_up: 'Accept-Encoding identity'
-      # copyparty takes the root; it is the catch-all after the Jellyfin path above.
-      # Groups come only from Caddy: the header is cleared first, then set for the ADMIN_USER login.
-      caddy.@copyparty_admin.header: 'Tailscale-User-Login ${ADMIN_USER}'
-      caddy.7_handle.0_forward_auth: '127.0.0.1:9099'
-      caddy.7_handle.0_forward_auth.uri: '/'
-      caddy.7_handle.1_reverse_proxy: '127.0.0.1:8081'
-      caddy.7_handle.1_reverse_proxy.header_up: 'Accept-Encoding identity'
-      caddy.@copyparty_other.not.header: 'Tailscale-User-Login ${ADMIN_USER}'
-      caddy.7_handle.2_request_header: '@copyparty_other -X-Remote-Groups'
-      caddy.7_handle.3_request_header: '@copyparty_admin X-Remote-Groups copyparty-admins'
-      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
-      # Copyparty's nonce-based CSP blocks the injected menu script, so the header is dropped on this route.
-      caddy.7_header: '-Content-Security-Policy'
-      caddy.7_replace.match.header: 'Content-Type text/html*'
-      caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
+      caddy.3_handle_path.0_forward_auth: '127.0.0.1:9091'
+      caddy.3_handle_path.0_forward_auth.uri: '/auth/api/authz/forward-auth'
+      caddy.3_handle_path.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
+      caddy.3_handle_path.1_respond: '@pihole_wrong_host "Forbidden" 403'
+      caddy.3_handle_path.2_header: '@pihole_other Content-Type "text/html; charset=utf-8"'
+      caddy.3_handle_path.3_respond: '@pihole_other "<html><body><h1>Unauthorized</h1><p>Pi-hole is only available to the lldap_admin group.</p>{file./etc/caddy/menu.html}</body></html>" 403'
+      caddy.3_handle_path.4_reverse_proxy: '127.0.0.2:8082'
+      caddy.3_handle_path.4_reverse_proxy.header_up: 'Accept-Encoding identity'
+      # Pi-hole sees the path without /pihole, so its redirects must be prefixed again.
+      caddy.3_handle_path.4_reverse_proxy.header_down: 'Location "^/" "/pihole/"'
+      caddy.3_handle_path.5_header: '-Content-Security-Policy'
     volumes:
       # caddy-docker-proxy watches containers for caddy.* labels.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - caddy_data:/var/lib/caddy
       - caddy_config:/config
-      - ./logs:/var/log
-      - data:/data
-      - data:/var/www/data/:rw
-      - tailscale_state:/var/lib/tailscale
-      # Syncthing keeps its config (including the usage-reporting consent) here.
-      - syncthing_config:/var/syncthing
-      # Jellyfin keeps its config, plugins, cache and logs here.
-      - jellyfin_data:/data/jellyfin
+      - ./logs/caddy:/var/log/caddy
+      - ./logs/tailscale:/var/log/tailscale
+      - ./logs/fail2ban:/var/log/fail2ban
+      - ./logs/pihole:/var/log/pihole
       - pihole_data:/etc/pihole
+      - tailscale_state:/var/lib/tailscale
+      # Core prepares shared directories before the apps start.
+      - data:/data
+      - core_state:/var/lib/localhost
+      - global_env:/var/environment/global-env
+  app-manager:
+    image: ghcr.io/frontrider/app-manager:0.0.7
+    restart: unless-stopped
+    networks:
+      - internal
+    labels:
+      caddy: "${CADDY_SITE:-:90}"
+      caddy_ingress_network: "${CADDY_NETWORK:-localhost_internal}"
+      # The root catch-all follows the other applications' path handlers.
+      # Explicit rewrite avoids checking for PHP files in Caddy's container.
+      caddy.99_handle.0_rewrite: "* /index.php"
+      caddy.99_handle.1_reverse_proxy: "{{upstreams 9000}}"
+      caddy.99_handle.1_reverse_proxy.transport: fastcgi
+      caddy.99_handle.1_reverse_proxy.transport.root: /var/www/html/public
+      caddy.99_handle.1_reverse_proxy.transport.split: .php
+      caddy.99_handle.1_reverse_proxy.transport.capture_stderr: ""
+      caddy.99_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+      # Public endpoint; authentication is handled by the application.
+      caddy.1_handle: "/sidebar"
+      caddy.1_handle.0_rewrite: "* /index.php"
+      caddy.1_handle.1_reverse_proxy: "{{upstreams 9000}}"
+      caddy.1_handle.1_reverse_proxy.transport: fastcgi
+      caddy.1_handle.1_reverse_proxy.transport.root: /var/www/html/public
+      caddy.1_handle.1_reverse_proxy.transport.split: .php
+      caddy.1_handle.1_reverse_proxy.transport.capture_stderr: ""
+      caddy.1_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+    environment:
+      CI_ENVIRONMENT: "${CI_ENVIRONMENT:-development}"
+      app_baseURL: "${APP_BASE_URL:-}"
+      DOMAIN_DIRECTORY: /var/environment/global-env
+      APP_SCHEME: "${APP_SCHEME:-https}"
+      # Resolve only the Caddy container's address on the shared network.
+      CADDY_PROXY_HOST: "${CADDY_PROXY_HOST:-core}"
+      app_indexPage: ""
+      # Set COOKIE_SECURE=true when Caddy serves HTTPS.
+      # For HTTP-only deployments set FASTCGI_HTTPS=off and COOKIE_SECURE=false.
+      cookie_secure: "${COOKIE_SECURE:-true}"
+      cookie_httponly: "true"
+      cookie_samesite: Lax
+      session_driver: 'CodeIgniter\Session\Handlers\FileHandler'
+      session_savePath: /var/www/html/writable/session
+      session_expiration: "${SESSION_LIFETIME:-3600}"
+      session_regenerateDestroy: "true"
+
+      # Bind directly as the user signing in to the existing LLDAP provider.
+      ldap_uri: "${LDAP_URI:-ldap://core:3890}"
+      ldap_userBaseDN: "${LDAP_USER_BASE_DN:-ou=people,dc=example,dc=com}"
+      ldap_groupBaseDN: "${LDAP_GROUP_BASE_DN:-ou=groups,dc=example,dc=com}"
+      ldap_userAttribute: "${LDAP_USER_ATTRIBUTE:-uid}"
+      ldap_adminGroup: "${LDAP_ADMIN_GROUP:-lldap_admin}"
+      # Default LLDAP uses plain LDAP; keep its network isolated or configure TLS.
+      ldap_startTLS: "${LDAP_START_TLS:-false}"
+      ldap_timeout: "${LDAP_TIMEOUT:-5}"
+      ldap_sessionLifetime: "${SESSION_LIFETIME:-3600}"
+
+      # singleton/<category>/<app>: one running app per category.
+      # standard categories have no exclusivity limit.
+      APPS_DIR: /apps
+      DOCKER_BIN: /usr/local/bin/docker
+      DOCKER_HOST: unix:///var/run/docker.sock
+      # Passed to each app's own Compose library-setup service.
+      JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
+      KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
+    volumes:
+      - type: bind
+        # Startup grants PHP workers access to the socket's detected group.
+        # Socket access grants host control.
+        source: "${DOCKER_SOCKET:-/var/run/docker.sock}"
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: false
+      - app-manager-data:/var/www/html/writable
+      - type: volume
+        source: global_env
+        target: /var/environment/global-env
+        read_only: true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET
+          cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
 networks:
   internal:
     name: localhost_internal
+    ipam:
+      config:
+        - subnet: 172.30.53.0/24
   external:
     name: localhost_external
     driver: bridge
 
 volumes:
+  app-manager-data:
+    driver: local
   caddy_data:
     driver: local
   caddy_config:
     driver: local
   data:
+    name: localhost_data
     driver: local
   tailscale_state:
     driver: local
-  syncthing_config:
+  global_env:
+    name: localhost_global_env
     driver: local
-  jellyfin_data:
+  core_state:
     driver: local
   pihole_data:
     driver: local
