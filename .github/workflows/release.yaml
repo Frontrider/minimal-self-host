@@ -4,7 +4,6 @@ on:
   push:
     tags:
       - '[0-9]*.[0-9]*.[0-9]*'
-
 jobs:
   image:
     runs-on: ubuntu-latest
@@ -29,7 +28,7 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v6
         with:
