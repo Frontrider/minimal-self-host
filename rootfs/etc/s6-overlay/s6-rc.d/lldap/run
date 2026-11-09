@@ -1,6 +1,6 @@
 #!/command/with-contenv sh
 exec 2>&1
-# LLDAP_LDAP_USER_PASS is the initial LDAP admin password. Authelia uses the same value to bind to LDAP.
+# LLDAP_LDAP_USER_PASS is the initial LDAP admin password.
 if [ -z "${LLDAP_LDAP_USER_PASS:-}" ]; then
   echo "LLDAP_LDAP_USER_PASS must be set to the initial admin password" >&2
   exit 1
@@ -13,9 +13,9 @@ mkdir -p "$state"
 export LLDAP_JWT_SECRET="$(cat "$state/jwt_secret")"
 export LLDAP_KEY_SEED="$(cat "$state/key_seed")"
 export LLDAP_DATABASE_URL="sqlite://$state/users.db?mode=rwc"
-# Must match base_dn in the Authelia template.
+# Must match the base DN used by LDAP clients.
 export LLDAP_LDAP_BASE_DN=dc=example,dc=com
-# LDAP listens on core's internal address so the Jellyfin container can reach it; Authelia uses the same address.
+# LDAP listens on core's internal address so clients can reach it.
 export LLDAP_LDAP_HOST=172.30.53.2
 export LLDAP_LDAP_PORT=3890
 # Web UI on loopback only; Tailscale serves it on port 8443 and the /users page embeds it.

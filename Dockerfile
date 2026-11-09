@@ -1,6 +1,6 @@
-# Released LLDAP and Authelia binaries, downloaded from GitHub releases.
+# Released service binaries, downloaded from GitHub releases.
 ARG LLDAP_VERSION=v0.6.3
-ARG AUTHELIA_VERSION=v4.39.28
+ARG AWL_VERSION=v0.20.0
 
 # Build stage: fetches the s6-overlay and Tailscale runtime, copied into the image below.
 FROM alpine:3.22 AS base-build
@@ -33,30 +33,46 @@ RUN xcaddy build --output /bin/caddy \
     --with github.com/mholt/caddy-l4 \
     --with github.com/caddyserver/replace-response
 
-# Build stage: downloads the released LLDAP and Authelia binaries for the target architecture.
+# Build stage: downloads the released LLDAP binaries for the target architecture.
 FROM alpine:3.22 AS auth-build
 ARG LLDAP_VERSION
-ARG AUTHELIA_VERSION
 ARG TARGETARCH=amd64
 
 RUN set -eux; \
     apk add --no-cache curl tar; \
     case "$TARGETARCH" in \
-        amd64) lldap_arch=amd64; authelia_arch=amd64 ;; \
-        arm64) lldap_arch=aarch64; authelia_arch=arm64 ;; \
+        amd64) lldap_arch=amd64 ;; \
+        arm64) lldap_arch=aarch64 ;; \
         *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
     esac; \
-    mkdir -p /authroot/opt /authroot/usr/local/bin; \
+    mkdir -p /authroot/opt; \
     curl -fsSL "https://github.com/lldap/lldap/releases/download/${LLDAP_VERSION}/${lldap_arch}-lldap.tar.gz" \
         | tar -C /authroot/opt -xz; \
     mv "/authroot/opt/${lldap_arch}-lldap" /authroot/opt/lldap; \
-    curl -fsSL "https://github.com/authelia/authelia/releases/download/${AUTHELIA_VERSION}/authelia-${AUTHELIA_VERSION}-linux-${authelia_arch}-musl.tar.gz" \
-        | tar -C /authroot/usr/local/bin -xz authelia; \
-    chmod +x /authroot/usr/local/bin/authelia /authroot/opt/lldap/lldap /authroot/opt/lldap/lldap_set_password
+    chmod +x /authroot/opt/lldap/lldap /authroot/opt/lldap/lldap_set_password
+
+FROM alpine:3.22 AS awl-build
+ARG AWL_VERSION
+ARG TARGETARCH=amd64
+
+RUN set -eux; \
+    apk add --no-cache ca-certificates curl tar; \
+    case "$TARGETARCH" in \
+        amd64) awl_arch=amd64 ;; \
+        arm64) awl_arch=arm64 ;; \
+        *) echo "Unsupported AWL architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    mkdir -p /awlroot; \
+    curl --retry 5 --retry-all-errors -fsSL \
+        "https://github.com/anywherelan/awl/releases/download/${AWL_VERSION}/awl-linux-${awl_arch}-${AWL_VERSION}.tar.gz" \
+        -o /tmp/awl.tar.gz; \
+    tar -C /awlroot -xzf /tmp/awl.tar.gz; \
+    test -x /awlroot/awl; \
+    rm /tmp/awl.tar.gz
 
 FROM alpine:3.22 AS core
 LABEL authors="frontrider"
-RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban inotify-tools jq logrotate openssl rsyslog tzdata unzip
+RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban inotify-tools jq logrotate openssl py3-ldap3 rsyslog tzdata unzip
 RUN addgroup -S -g 1000 files && adduser -S -u 1000 -G files -h /data files
 COPY --from=base-build /s6root/ /
 
@@ -77,6 +93,7 @@ COPY --from=base-build /usr/bin/tailscale /usr/bin/tailscale
 COPY --from=base-build /usr/sbin/tailscaled /usr/sbin/tailscaled
 COPY --from=build /bin/caddy /bin/caddy
 COPY --from=auth-build /authroot/ /
+COPY --from=awl-build /awlroot/awl /usr/local/bin/awl
 COPY rootfs/ /
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run \
     && mkdir -p /config /var/lib/tailscale /var/log/tailscale /var/environment/global-env

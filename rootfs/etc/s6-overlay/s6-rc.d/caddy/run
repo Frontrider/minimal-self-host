@@ -7,4 +7,17 @@ if [ "${DEBUG_MODE:-false}" = "true" ]; then
     export CADDY_GLOBAL_DEBUG=debug
 fi
 
+export CADDY_HTTPS_MODE_ENABLED=false
+mkdir -p /var/environment/global-env
+rm -f /var/environment/global-env/TAILSCALE_ENABLED
+printf '%s' off > /var/environment/global-env/HTTPS_ENABLED.tmp
+printf '%s' http > /var/environment/global-env/SCHEME.tmp
+if [ -n "${TS_AUTH_KEY:-}" ]; then
+    export CADDY_HTTPS_MODE_ENABLED=true
+    printf '%s' on > /var/environment/global-env/HTTPS_ENABLED.tmp
+    printf '%s' https > /var/environment/global-env/SCHEME.tmp
+fi
+mv /var/environment/global-env/SCHEME.tmp /var/environment/global-env/SCHEME
+mv /var/environment/global-env/HTTPS_ENABLED.tmp /var/environment/global-env/HTTPS_ENABLED
+
 exec /bin/caddy docker-proxy --caddyfile-path /etc/caddy/Caddyfile

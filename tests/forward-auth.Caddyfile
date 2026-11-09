@@ -1,0 +1,7 @@
+http://:18888 {
+    forward_auth 127.0.0.1:9091 {
+        uri /auth/api/authz/forward-auth
+        copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+    }
+    respond "{http.request.header.Remote-User}|{http.request.header.Remote-Groups}|{http.request.header.Remote-Name}|{http.request.header.Remote-Email}"
+}

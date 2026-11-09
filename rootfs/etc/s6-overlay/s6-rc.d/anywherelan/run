@@ -1,0 +1,20 @@
+#!/command/with-contenv sh
+exec 2>&1
+export AWL_DATA_DIR="${AWL_DATA_DIR:-/var/lib/awl}"
+
+# Keep AWL's UI on loopback and disable its separate admin.awl:80 listener.
+set -eu
+mkdir -p "$AWL_DATA_DIR"
+config="$AWL_DATA_DIR/config_awl.json"
+tmp="$config.tmp"
+if [ -f "$config" ]; then
+    jq '.httpListenAddress = "127.0.0.1:8639" |
+        .httpListenOnAdminHost = false |
+        if (.p2pNode.name // "") == "" then .p2pNode.name = "local-host" else . end' "$config" > "$tmp"
+else
+    printf '%s\n' '{"httpListenAddress":"127.0.0.1:8639","httpListenOnAdminHost":false,"p2pNode":{"name":"local-host"}}' > "$tmp"
+fi
+chmod 600 "$tmp"
+mv "$tmp" "$config"
+
+exec /usr/local/bin/awl

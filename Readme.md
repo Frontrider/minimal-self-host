@@ -7,9 +7,7 @@ Nowhere near complete, right now it works as a media center. It should be light 
 My personal setup is a pi4, with an external hard drive.
 
 Included:
-- Jellyfin: watching videos is just better with it.
-- Copyparty: A very well-made and light file server/browser. The gui could use some work, but it is fast and more featureful than everything else I could find.
-- Syncthing: One of the best tools for the average person to send and receive files from friends and family.
+- An application manager.
 - PiHole: network level ad blocking.
 
 ## Tailscale

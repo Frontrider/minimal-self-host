@@ -7,17 +7,27 @@
 	}
 }
 
+http://:8080 {
+    reverse_proxy 127.0.0.1:8639
+}
+
+http://:8443 {
+    reverse_proxy 127.0.0.1:17180
+}
+
 :80 {
-    # DOMAIN is written by the tailscale service once the node is up.
-    redir https://{file./var/environment/global-env/DOMAIN}{uri} permanent
+    @health path /__health
+    respond @health 200
+    @tailscale expression `"{$CADDY_HTTPS_MODE_ENABLED}" == "true"`
+    handle @tailscale {
+        redir https://{file./var/environment/global-env/DOMAIN}{uri} permanent
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:90
+    }
 
     log {
         output stdout
     }
 }
-
-# Fallback for requests that match no generated site, so the internal HTTP server always exists.
-http://:8080 {
-    respond 404
-}
-

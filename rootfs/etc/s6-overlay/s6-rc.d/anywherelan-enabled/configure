@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ -n "${TS_AUTH_KEY:-}" ]; then
+    echo "Tailscale auth key configured; skipping Anywherelan" >&2
+    exit 1
+fi
+
+mkdir -p /var/environment/global-env
+printf '%s' 'local-host.awl' > /var/environment/global-env/DOMAIN.tmp
+mv /var/environment/global-env/DOMAIN.tmp /var/environment/global-env/DOMAIN

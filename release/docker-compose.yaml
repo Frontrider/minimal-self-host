@@ -2,16 +2,23 @@ services:
   core:
     image: ghcr.io/frontrider/minimal-self-host:0.0.3
     restart: always
-    hostname: localhost
+    hostname: local-host
     environment:
       MAIL: ${LOCALHOST_MAIL}
       TS_AUTH_KEY: ${LOCALHOST_TS_AUTH_KEY}
+      AWL_DATA_DIR: /var/lib/awl
       XDG_DATA_HOME: /var/lib/caddy
       DEBUG_MODE: ${DEBUG_MODE:-false}
       # Initial LLDAP admin password, also used by Authelia to bind to LDAP.
       LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
       # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
       CORE_INTERNAL_IP: 172.30.53.2
+    ports:
+      - "127.0.0.1:80:80"
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
     networks:
       internal:
         ipv4_address: 172.30.53.2
@@ -73,6 +80,7 @@ services:
       # Core prepares shared directories before the apps start.
       - data:/data
       - core_state:/var/lib/localhost
+      - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
     image: ghcr.io/frontrider/app-manager:0.0.11
@@ -187,6 +195,8 @@ volumes:
     name: localhost_global_env
     driver: local
   core_state:
+    driver: local
+  awl_state:
     driver: local
   pihole_data:
     driver: local
