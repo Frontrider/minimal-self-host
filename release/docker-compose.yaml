@@ -2,28 +2,32 @@ services:
   core:
     image: ghcr.io/frontrider/minimal-self-host:0.0.4
     restart: always
-    hostname: local-host
+    hostname: localhost
     environment:
       MAIL: ${LOCALHOST_MAIL}
       TS_AUTH_KEY: ${LOCALHOST_TS_AUTH_KEY}
       AWL_DATA_DIR: /var/lib/awl
       XDG_DATA_HOME: /var/lib/caddy
       DEBUG_MODE: ${DEBUG_MODE:-false}
-      # Initial LLDAP admin password, also used by Authelia to bind to LDAP.
+      # Initial LLDAP admin password.
       LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
       # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
-      CORE_INTERNAL_IP: 172.30.53.254
+      CORE_INTERNAL_IP: 172.30.53.253
     ports:
-      - "127.0.0.1:8080:80"
+      - "80:80"
+      - "90:90"
+      - "127.0.0.1:8080:8080"
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - NET_ADMIN
     networks:
       internal:
-        ipv4_address: 172.30.53.254
+        ipv4_address: 172.30.53.253
+      external: {}
+
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2019/config/ >/dev/null"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:80/__health >/dev/null"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -39,19 +43,16 @@ services:
       caddy.10_handle.0_forward_auth.uri: '/auth/api/authz/forward-auth'
       caddy.10_handle.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
       caddy.10_handle.1_reverse_proxy: 'service-manager:8080'
-      # Authelia's login portal and forward-auth API live under /auth.
-      caddy.9_handle: '/auth/*'
-      caddy.9_handle.0_reverse_proxy: '127.0.0.1:9091'
-      # /users shows LLDAP in an iframe. LLDAP is served on its own tailnet port (8443) because its UI needs root-level paths.
+      # LLDAP needs root-level paths, so it is served on port 8443.
       # No forward auth here: LLDAP's own login is the only sign-in.
       caddy.8_handle.0_header: 'Content-Type "text/html; charset=utf-8"'
-      caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"https://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
+      caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"{file./var/environment/global-env/SCHEME}://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
       caddy.8_handle: '/users*'
       # Pi-hole's admin UI is only reachable through Caddy, under /pihole, and only for the admin user.
       caddy.3_redir: '/pihole /pihole/admin/ permanent'
       caddy.@pihole_root.path: '/pihole/'
       caddy.3_redir_1: '@pihole_root /pihole/admin/ permanent'
-      # Authelia sends Remote-Groups as a comma-separated list; match lldap_admin as a whole entry.
+      # Match lldap_admin as a whole entry in the comma-separated Remote-Groups header.
       caddy.@pihole_other.not.header_regexp: 'Remote-Groups (^|,)lldap_admin(,|\z)'
       caddy.@pihole_wrong_host.expression: '`{http.request.host} != ph(req, "file./var/environment/global-env/DOMAIN")`'
       caddy.3_handle_path: '/pihole/*'
@@ -73,6 +74,7 @@ services:
       - caddy_config:/config
       - ./logs/caddy:/var/log/caddy
       - ./logs/tailscale:/var/log/tailscale
+      - ./logs/anywherelan:/var/log/anywherelan
       - ./logs/fail2ban:/var/log/fail2ban
       - ./logs/pihole:/var/log/pihole
       - pihole_data:/etc/pihole
@@ -83,11 +85,17 @@ services:
       - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:0.0.11
+    image: ghcr.io/frontrider/app-manager:0.0.7
+    entrypoint: ["/bin/sh", "/etc/app-manager-mode-entrypoint.sh"]
+    command: ["php-fpm"]
+    depends_on:
+      core:
+        condition: service_healthy
+        restart: true
     restart: unless-stopped
     networks:
       internal:
-        ipv4_address: 172.30.53.255
+        ipv4_address: 172.30.53.254
     labels:
       caddy: "${CADDY_SITE:-:90}"
       caddy_ingress_network: "${CADDY_NETWORK:-localhost_internal}"
@@ -99,7 +107,7 @@ services:
       caddy.99_handle.1_reverse_proxy.transport.root: /var/www/html/public
       caddy.99_handle.1_reverse_proxy.transport.split: .php
       caddy.99_handle.1_reverse_proxy.transport.capture_stderr: ""
-      caddy.99_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+      caddy.99_handle.1_reverse_proxy.transport.env: "HTTPS {file./var/environment/global-env/HTTPS_ENABLED}"
       # Public endpoint; authentication is handled by the application.
       caddy.1_handle: "/sidebar"
       caddy.1_handle.0_rewrite: "* /index.php"
@@ -108,7 +116,7 @@ services:
       caddy.1_handle.1_reverse_proxy.transport.root: /var/www/html/public
       caddy.1_handle.1_reverse_proxy.transport.split: .php
       caddy.1_handle.1_reverse_proxy.transport.capture_stderr: ""
-      caddy.1_handle.1_reverse_proxy.transport.env: "HTTPS ${FASTCGI_HTTPS:-on}"
+      caddy.1_handle.1_reverse_proxy.transport.env: "HTTPS {file./var/environment/global-env/HTTPS_ENABLED}"
     environment:
       CI_ENVIRONMENT: "${CI_ENVIRONMENT:-development}"
       app_baseURL: "${APP_BASE_URL:-}"
@@ -117,8 +125,7 @@ services:
       # Resolve only the Caddy container's address on the shared network.
       CADDY_PROXY_HOST: "${CADDY_PROXY_HOST:-core}"
       app_indexPage: ""
-      # Set COOKIE_SECURE=true when Caddy serves HTTPS.
-      # For HTTP-only deployments set FASTCGI_HTTPS=off and COOKIE_SECURE=false.
+      # Anywherelan's startup wrapper sets HTTP and disables secure cookies.
       cookie_secure: "${COOKIE_SECURE:-true}"
       cookie_httponly: "true"
       cookie_samesite: Lax
@@ -147,6 +154,7 @@ services:
       JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
       KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
     volumes:
+      - ./rootfs/etc/app-manager-mode-entrypoint.sh:/etc/app-manager-mode-entrypoint.sh:ro
       - type: bind
         # Startup grants PHP workers access to the socket's detected group.
         # Socket access grants host control.

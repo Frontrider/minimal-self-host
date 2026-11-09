@@ -5,6 +5,10 @@ if [ -z "${LLDAP_LDAP_USER_PASS:-}" ]; then
   echo "LLDAP_LDAP_USER_PASS must be set to the initial admin password" >&2
   exit 1
 fi
+if [ -z "${CORE_INTERNAL_IP:-}" ]; then
+  echo "CORE_INTERNAL_IP must be set to core's internal network address" >&2
+  exit 1
+fi
 state=/var/lib/localhost/lldap
 mkdir -p "$state"
 # Secrets are generated once and kept in the core state volume.
@@ -16,12 +20,21 @@ export LLDAP_DATABASE_URL="sqlite://$state/users.db?mode=rwc"
 # Must match the base DN used by LDAP clients.
 export LLDAP_LDAP_BASE_DN=dc=example,dc=com
 # LDAP listens on core's internal address so clients can reach it.
-export LLDAP_LDAP_HOST=172.30.53.2
+export LLDAP_LDAP_HOST="$CORE_INTERNAL_IP"
 export LLDAP_LDAP_PORT=3890
 # Web UI on loopback only; Tailscale serves it on port 8443 and the /users page embeds it.
 export LLDAP_HTTP_HOST=127.0.0.1
 export LLDAP_HTTP_PORT=17180
 cd /opt/lldap
-# Runs beside the server: it waits for the API, then creates the service account.
+./lldap run &
+server_pid=$!
 sh /etc/lldap/provision-service-account.sh &
-exec ./lldap run
+provision_pid=$!
+
+cleanup() {
+  kill "$server_pid" "$provision_pid" 2>/dev/null || true
+  wait "$server_pid" "$provision_pid" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 0' TERM INT
+wait "$server_pid"

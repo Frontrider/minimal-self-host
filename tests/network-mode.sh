@@ -195,6 +195,7 @@ until curl -sS -o /dev/null http://127.0.0.1:8080/ 2>/dev/null; do
 done
 
 [ "$(curl -fsS http://127.0.0.1:8080/)" = admin ]
+[ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1/__health)" = 200 ]
 if [ "$CADDY_HTTPS_MODE_ENABLED" = true ]; then
     [ "$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1/path)" = \
         "301 https://test.example/path" ]

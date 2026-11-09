@@ -16,8 +16,9 @@ http://:8443 {
 }
 
 :80 {
-    @health path /__health
-    respond @health 200
+    handle /__health {
+        respond 200
+    }
     @tailscale expression `"{$CADDY_HTTPS_MODE_ENABLED}" == "true"`
     handle @tailscale {
         redir https://{file./var/environment/global-env/DOMAIN}{uri} permanent

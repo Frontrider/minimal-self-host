@@ -10,6 +10,7 @@ from ldap3.core.exceptions import LDAPBindError, LDAPException, LDAPInvalidCrede
 from ldap3.utils.dn import escape_rdn, parse_dn
 
 logging.basicConfig(level=logging.INFO)
+LDAP_HOST = os.environ.get("LDAP_HOST") or os.environ["CORE_INTERNAL_IP"]
 LDAP_BASE = "ou=people,dc=example,dc=com"
 LDAP_GROUP_BASE = "ou=groups,dc=example,dc=com"
 
@@ -34,7 +35,7 @@ class Handler(BaseHTTPRequestHandler):
 
         dn = f"uid={escape_rdn(username)},{LDAP_BASE}"
         try:
-            server = Server(os.environ.get("LDAP_HOST", "172.30.53.2"), port=3890,
+            server = Server(LDAP_HOST, port=3890,
                             connect_timeout=5, get_info=NONE)
             with Connection(server, user=dn, password=password, auto_bind=True, receive_timeout=5,
                             raise_exceptions=True, check_names=False) as connection:
