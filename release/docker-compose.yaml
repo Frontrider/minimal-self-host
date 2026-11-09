@@ -1,6 +1,6 @@
 services:
   core:
-    image: ghcr.io/frontrider/minimal-self-host:0.0.3
+    image: ghcr.io/frontrider/minimal-self-host:0.0.4
     restart: always
     hostname: local-host
     environment:
@@ -12,16 +12,16 @@ services:
       # Initial LLDAP admin password, also used by Authelia to bind to LDAP.
       LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
       # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
-      CORE_INTERNAL_IP: 172.30.53.2
+      CORE_INTERNAL_IP: 172.30.53.254
     ports:
-      - "127.0.0.1:80:80"
+      - "127.0.0.1:8080:80"
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - NET_ADMIN
     networks:
       internal:
-        ipv4_address: 172.30.53.2
+        ipv4_address: 172.30.53.254
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2019/config/ >/dev/null"]
       interval: 5s
@@ -86,7 +86,8 @@ services:
     image: ghcr.io/frontrider/app-manager:0.0.11
     restart: unless-stopped
     networks:
-      - internal
+      internal:
+        ipv4_address: 172.30.53.255
     labels:
       caddy: "${CADDY_SITE:-:90}"
       caddy_ingress_network: "${CADDY_NETWORK:-localhost_internal}"
