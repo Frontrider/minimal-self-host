@@ -67,6 +67,11 @@ jobs:
           done
           docker buildx imagetools create --tag "$image:$version" \
             "$image:$version-amd64" "$image:$version-arm64"
+          # Update "latest" only for stable releases, not prereleases.
+          if [[ "$version" != *-* ]]; then
+            docker buildx imagetools create --tag "$image:latest" \
+              "$image:$version-amd64" "$image:$version-arm64"
+          fi
           printf 'name=%s\namd64=%s\narm64=%s\nversion=%s\ntag=%s\n' \
             "$image:$version" "$image:$version-amd64" "$image:$version-arm64" \
             "$version" "$RELEASE_TAG" >> "$GITHUB_OUTPUT"
