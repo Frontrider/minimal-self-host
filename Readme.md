@@ -56,16 +56,6 @@ If you don't know what you're doing, then don't change any of these settings.
 
 I could not lower the barrier of entry any further for now.
 
-### Ad blocking
-
-Pi hole is included in the stack, but it is not configured to be used as a DNS server for your tailnet.
-Everything is provided in this image, You can continue the setup from here.
-https://tailscale.com/docs/solutions/block-ads-all-devices-anywhere-using-raspberry-pi#step-4-set-raspberry-pi-as-the-dns-server-for-your-tailnet
-
-Also refer to the Pihole documentation for more information.
-https://docs.pi-hole.net/main/
-
-As long as a device is connected to your tailnet, it will get network level ad blocking. Yes, this means that it works on your phone when you're not home.
 ## Running
 
 Once you have those two set up, run docker compose up -d, and you can access everything on your tailnet.
