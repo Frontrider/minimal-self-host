@@ -4,7 +4,4 @@ mkdir -p /var/lib/logrotate
 while true; do
     sleep 60
     logrotate -s /var/lib/logrotate/status /etc/logrotate-services.conf
-    if [ -f /etc/pihole/pihole.toml ]; then
-        logrotate -s /var/lib/logrotate/pihole-status /etc/logrotate.d/pihole
-    fi
 done

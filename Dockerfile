@@ -76,20 +76,7 @@ RUN apk add --no-cache ca-certificates cyrus-sasl curl fail2ban inotify-tools jq
 RUN addgroup -S -g 1000 files && adduser -S -u 1000 -G files -h /data files
 COPY --from=base-build /s6root/ /
 
-# Pi-hole's FTL resolver and web UI run in core; the installer is run unattended and its services are started by s6.
-RUN apk add --no-cache bash curl openrc \
-    && mkdir -p /etc/pihole \
-    && printf '[dns]\nupstreams = ["1.1.1.1", "1.0.0.1"]\n[webserver]\nport = "127.0.0.2:8082"\n' > /etc/pihole/pihole.toml \
-    && curl -fsSL https://install.pi-hole.net -o /tmp/pihole-install.sh \
-    && bash -ec ' \
-        SKIP_INSTALL=true source /tmp/pihole-install.sh --unattended; \
-        enable_service() { printf "Service enable deferred to s6: %s\n" "$1"; }; \
-        restart_service() { printf "Service startup deferred to s6: %s\n" "$1"; }; \
-        main --unattended' \
-    && rm /tmp/pihole-install.sh \
-    && install -m 644 /etc/.pihole/advanced/Templates/logrotate /etc/logrotate.d/pihole \
-    && setcap 'cap_net_bind_service,cap_net_raw,cap_chown+ep' /usr/bin/pihole-FTL
-COPY --from=base-build /usr/bin/tailscale /usr/bin/tailscale
+ COPY --from=base-build /usr/bin/tailscale /usr/bin/tailscale
 COPY --from=base-build /usr/sbin/tailscaled /usr/sbin/tailscaled
 COPY --from=build /bin/caddy /bin/caddy
 COPY --from=auth-build /authroot/ /
@@ -97,5 +84,5 @@ COPY --from=awl-build /awlroot/awl /usr/local/bin/awl
 COPY rootfs/ /
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run \
     && mkdir -p /config /var/lib/tailscale /var/log/tailscale /var/environment/global-env
-EXPOSE 53/tcp 53/udp 80 443 22000/tcp 22000/udp
+EXPOSE 80 443 22000/tcp 22000/udp
 ENTRYPOINT ["/init"]

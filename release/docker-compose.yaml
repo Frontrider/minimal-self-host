@@ -11,7 +11,7 @@ services:
       DEBUG_MODE: ${DEBUG_MODE:-false}
       # Initial LLDAP admin password.
       LLDAP_LDAP_USER_PASS: ${ADMIN_PASS}
-      # Fixed address of core on the internal network, so the Pi-hole DNS record can point at it.
+      # Must match core's internal network address for LDAP.
       CORE_INTERNAL_IP: 172.30.53.253
     ports:
       - "80:80"
@@ -48,25 +48,6 @@ services:
       caddy.8_handle.0_header: 'Content-Type "text/html; charset=utf-8"'
       caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"{file./var/environment/global-env/SCHEME}://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
       caddy.8_handle: '/users*'
-      # Pi-hole's admin UI is only reachable through Caddy, under /pihole, and only for the admin user.
-      caddy.3_redir: '/pihole /pihole/admin/ permanent'
-      caddy.@pihole_root.path: '/pihole/'
-      caddy.3_redir_1: '@pihole_root /pihole/admin/ permanent'
-      # Match lldap_admin as a whole entry in the comma-separated Remote-Groups header.
-      caddy.@pihole_other.not.header_regexp: 'Remote-Groups (^|,)lldap_admin(,|\z)'
-      caddy.@pihole_wrong_host.expression: '`{http.request.host} != ph(req, "file./var/environment/global-env/DOMAIN")`'
-      caddy.3_handle_path: '/pihole/*'
-      caddy.3_handle_path.0_forward_auth: '127.0.0.1:9091'
-      caddy.3_handle_path.0_forward_auth.uri: '/auth/api/authz/forward-auth'
-      caddy.3_handle_path.0_forward_auth.copy_headers: 'Remote-User Remote-Groups Remote-Name Remote-Email'
-      caddy.3_handle_path.1_respond: '@pihole_wrong_host "Forbidden" 403'
-      caddy.3_handle_path.2_header: '@pihole_other Content-Type "text/html; charset=utf-8"'
-      caddy.3_handle_path.3_respond: '@pihole_other "<html><body><h1>Unauthorized</h1><p>Pi-hole is only available to the lldap_admin group.</p>{file./etc/caddy/menu.html}</body></html>" 403'
-      caddy.3_handle_path.4_reverse_proxy: '127.0.0.2:8082'
-      caddy.3_handle_path.4_reverse_proxy.header_up: 'Accept-Encoding identity'
-      # Pi-hole sees the path without /pihole, so its redirects must be prefixed again.
-      caddy.3_handle_path.4_reverse_proxy.header_down: 'Location "^/" "/pihole/"'
-      caddy.3_handle_path.5_header: '-Content-Security-Policy'
     volumes:
       # caddy-docker-proxy watches containers for caddy.* labels.
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -76,8 +57,6 @@ services:
       - ./logs/tailscale:/var/log/tailscale
       - ./logs/anywherelan:/var/log/anywherelan
       - ./logs/fail2ban:/var/log/fail2ban
-      - ./logs/pihole:/var/log/pihole
-      - pihole_data:/etc/pihole
       - tailscale_state:/var/lib/tailscale
       # Core prepares shared directories before the apps start.
       - data:/data
@@ -85,9 +64,7 @@ services:
       - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:0.0.7
-    entrypoint: ["/bin/sh", "/etc/app-manager-mode-entrypoint.sh"]
-    command: ["php-fpm"]
+    image: ghcr.io/frontrider/app-manager:0.0.15
     depends_on:
       core:
         condition: service_healthy
@@ -206,6 +183,4 @@ volumes:
   core_state:
     driver: local
   awl_state:
-    driver: local
-  pihole_data:
     driver: local
