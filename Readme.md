@@ -31,6 +31,12 @@ https://tailscale.com/download
 If nothing is configured, the container will launch an anywherelan service, accessible on http://127.0.01:8080.
 HTTPS is also disabled in this mode, because there is no way to get a trusted certificate for a local address.
 
+
+### Hardware safety
+
+If the hardware ever gets above 90% load, this stack will start shutting down other containers, starting with the biggest consumers. 
+
+
 ### Configuration
 
 You need to create a file named `.env` in the root of the project. You can rename/copy the `release/env` file and use it as a base.

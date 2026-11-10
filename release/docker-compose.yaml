@@ -1,6 +1,6 @@
 services:
   core:
-    image: ghcr.io/frontrider/minimal-self-host:0.0.7
+    image: ghcr.io/frontrider/minimal-self-host:latest
     restart: always
     hostname: localhost
     environment:
@@ -68,7 +68,7 @@ services:
       - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:0.0.16
+    image: ghcr.io/frontrider/app-manager:latest
     depends_on:
       core:
         condition: service_healthy
