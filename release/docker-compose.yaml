@@ -64,7 +64,7 @@ services:
       - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:0.0.15
+    image: ghcr.io/frontrider/app-manager:0.0.16
     depends_on:
       core:
         condition: service_healthy
