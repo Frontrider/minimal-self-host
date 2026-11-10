@@ -34,6 +34,7 @@ services:
       timeout: 3s
       retries: 12
     labels:
+      protected: "true"
       # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
       caddy: ':90'
       # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
@@ -51,14 +52,17 @@ services:
       caddy.8_handle.1_respond: '"<html><body style=\"margin:0\"><iframe src=\"{file./var/environment/global-env/SCHEME}://{file./var/environment/global-env/DOMAIN}:8443/\" style=\"border:0;width:100vw;height:100vh\"></iframe></body></html>" 200'
       caddy.8_handle: '/users*'
     volumes:
-      # caddy-docker-proxy watches containers for caddy.* labels.
+      # Caddy reads labels; host-monitor uses the socket to stop overloaded containers.
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Host metrics, not this container's cgroup limits.
+      - /proc:/host/proc:ro
       - caddy_data:/var/lib/caddy
       - caddy_config:/config
       - ./logs/caddy:/var/log/caddy
       - ./logs/tailscale:/var/log/tailscale
       - ./logs/anywherelan:/var/log/anywherelan
       - ./logs/fail2ban:/var/log/fail2ban
+      - ./logs/host-monitor:/var/log/host-monitor
       - tailscale_state:/var/lib/tailscale
       # Core prepares shared directories before the apps start.
       - data:/data
@@ -78,6 +82,7 @@ services:
       internal:
         ipv4_address: 172.30.53.254
     labels:
+      protected: "true"
       caddy: "${CADDY_SITE:-:90}"
       caddy_ingress_network: "${CADDY_NETWORK:-localhost_internal}"
       # The root catch-all follows the other applications' path handlers.
