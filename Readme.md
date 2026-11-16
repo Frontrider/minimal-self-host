@@ -1,7 +1,5 @@
 # Minimal, self-hosted services
 
-THIS REPOSITORY IS A PUBLIC MIRROR. PULL REQUESTS ARE CURRENTLY DISABLED, OPEN AN ISSUE IF YOU WANT TO CONTRIBUTE.
-
 This is an experiment for a minimal self hosted stack, that is trying to serve what one person needs out of a cloud environment.
 Nowhere near complete, right now it works as a media center. It should be light enough to run on a raspberry pi, or a small VPS.
 My personal setup is a pi4, with an external hard drive.
