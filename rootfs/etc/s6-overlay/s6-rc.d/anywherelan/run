@@ -17,4 +17,22 @@ fi
 chmod 600 "$tmp"
 mv "$tmp" "$config"
 
+# Publish the address the local AWL service reports for this node. Keep watching so
+# a rename through the UI or a deleted file is picked up without a restart.
+(
+    mkdir -p /var/environment/global-env
+    while true; do
+        name="$(curl -fsS http://127.0.0.1:8639/api/v0/settings/peer_info 2>/dev/null |
+            jq -r '.Name // empty' 2>/dev/null)" || name=""
+        if [ -n "$name" ]; then
+            domain="$name.awl"
+            if [ "$(cat /var/environment/global-env/DOMAIN 2>/dev/null)" != "$domain" ]; then
+                printf '%s' "$domain" > /var/environment/global-env/DOMAIN.tmp
+                mv /var/environment/global-env/DOMAIN.tmp /var/environment/global-env/DOMAIN
+            fi
+        fi
+        sleep 2
+    done
+) &
+
 exec /usr/local/bin/awl

@@ -28,14 +28,12 @@ https://tailscale.com/download
 
 ## Anywherelan
 
-If nothing is configured, the container will launch an anywherelan service, accessible on http://127.0.01:8080.
+Anywherelan's admin panel is accessible on 127.0.0.1:8080 on the host computer. Nothing else is exposed.
 HTTPS is also disabled in this mode, because there is no way to get a trusted certificate for a local address.
-
 
 ### Hardware safety
 
-If the hardware ever gets above 90% load, this stack will start shutting down other containers, starting with the biggest consumers. 
-
+If the hardware ever gets above 90% load, this stack will start shutting down other containers, starting with the biggest consumers.
 
 ### Configuration
 
