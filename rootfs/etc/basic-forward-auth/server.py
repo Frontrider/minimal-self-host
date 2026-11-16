@@ -13,13 +13,22 @@ logging.basicConfig(level=logging.INFO)
 LDAP_HOST = os.environ.get("LDAP_HOST") or os.environ["CORE_INTERNAL_IP"]
 LDAP_BASE = "ou=people,dc=example,dc=com"
 LDAP_GROUP_BASE = "ou=groups,dc=example,dc=com"
+LDAP_ADMIN_GROUP = "lldap_admin"
+FORWARD_AUTH_PATH = "/auth/api/authz/forward-auth"
+# This variant returns the same identity headers, but only for LLDAP admins.
+FORWARD_AUTH_ADMIN_PATHS = (
+    "/auth/api/authz/forward-auth-admin",
+    "/auth/api/authz/forward-auth/admin",
+)
 
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path.split("?", 1)[0] != "/auth/api/authz/forward-auth":
+        path = self.path.split("?", 1)[0]
+        if path != FORWARD_AUTH_PATH and path not in FORWARD_AUTH_ADMIN_PATHS:
             self.send_error(404)
             return
+        admin_only = path != FORWARD_AUTH_PATH
 
         try:
             scheme, encoded = self.headers.get("Authorization", "").split(" ", 1)
@@ -49,6 +58,8 @@ class Handler(BaseHTTPRequestHandler):
                 email = str(entry.mail.value or "")
                 groups = []
                 for group_dn in entry.memberOf.values:
+                    if not group_dn:
+                        continue
                     parsed = parse_dn(group_dn)
                     if (len(parsed) >= 2 and parsed[0][0].lower() == "cn"
                             and group_dn.lower().endswith("," + LDAP_GROUP_BASE)):
@@ -56,6 +67,9 @@ class Handler(BaseHTTPRequestHandler):
                         if "," in group or "\\" in group:
                             raise LDAPException("LDAP group name cannot be represented safely")
                         groups.append(group)
+                if admin_only and LDAP_ADMIN_GROUP not in groups:
+                    self.forbidden()
+                    return
                 values = {
                     "Remote-User": user,
                     "Remote-Groups": ",".join(groups),
@@ -82,6 +96,10 @@ class Handler(BaseHTTPRequestHandler):
     def unauthorized(self):
         self.send_response(401)
         self.send_header("WWW-Authenticate", 'Basic realm="Minimal Self Host", charset="UTF-8"')
+        self.end_headers()
+
+    def forbidden(self):
+        self.send_response(403)
         self.end_headers()
 
 

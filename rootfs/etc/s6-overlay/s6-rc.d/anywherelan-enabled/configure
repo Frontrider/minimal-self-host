@@ -5,6 +5,5 @@ if [ -n "${TS_AUTH_KEY:-}" ]; then
     exit 1
 fi
 
+# DOMAIN is published by the anywherelan service from its local API.
 mkdir -p /var/environment/global-env
-printf '%s' 'local-host.awl' > /var/environment/global-env/DOMAIN.tmp
-mv /var/environment/global-env/DOMAIN.tmp /var/environment/global-env/DOMAIN

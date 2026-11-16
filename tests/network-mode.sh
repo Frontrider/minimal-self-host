@@ -123,8 +123,23 @@ if [ "$1" = "--inside-auth" ]; then
     exit
 fi
 if [ "$1" = "--inside-awl" ]; then
+    mkdir -p /var/environment/global-env
+    rm -f /var/environment/global-env/DOMAIN
     /bin/sh /source/rootfs/etc/s6-overlay/s6-rc.d/anywherelan/run >/tmp/awl.log 2>&1 &
     awl_pid=$!
+    await_domain() {
+        expected=$1
+        domain_tries=0
+        until [ "$(cat /var/environment/global-env/DOMAIN 2>/dev/null)" = "$expected" ]; do
+            domain_tries=$((domain_tries + 1))
+            if [ "$domain_tries" -ge 30 ]; then
+                echo "DOMAIN did not become $expected" >&2
+                cat /var/environment/global-env/DOMAIN >&2 || true
+                exit 1
+            fi
+            sleep 1
+        done
+    }
     tries=0
     until curl -fsS -o /dev/null http://127.0.0.1:8639/ 2>/dev/null; do
         tries=$((tries + 1))
@@ -136,6 +151,7 @@ if [ "$1" = "--inside-awl" ]; then
     done
     jq -e '.httpListenAddress == "127.0.0.1:8639" and .httpListenOnAdminHost == false and .p2pNode.name == "local-host" and (.p2pNode.peerId | length > 0)' \
         /tmp/awl/config_awl.json >/dev/null
+    await_domain local-host.awl
     if curl -sS -o /dev/null --max-time 1 http://127.0.0.66:80/ 2>/dev/null; then
         echo "Anywherelan unexpectedly bound port 80" >&2
         exit 1
@@ -158,7 +174,10 @@ if [ "$1" = "--inside-awl" ]; then
     done
     jq -e --arg peer_id "$peer_id" '.p2pNode.name == "custom-name" and .p2pNode.peerId == $peer_id' \
         /tmp/awl/config_awl.json >/dev/null
-    echo "Anywherelan admin listener and peer name passed"
+    await_domain custom-name.awl
+    rm -f /var/environment/global-env/DOMAIN
+    await_domain custom-name.awl
+    echo "Anywherelan admin listener, peer name, and domain publishing passed"
     exit
 fi
 
@@ -180,7 +199,12 @@ if /command/execlineb -c "$(cat "/source/rootfs/etc/s6-overlay/s6-rc.d/$disabled
     exit 1
 fi
 
-/bin/caddy respond --listen 127.0.0.1:90 --body main >/dev/null 2>&1 &
+fixture='main https://test.example/login http&#x3A;&#x2F;&#x2F;test.example&#x2F;login'
+/bin/caddy respond --listen 127.0.0.1:90 \
+    --header 'Content-Type: text/html; charset=utf-8' \
+    --header 'Location: https://test.example/login' \
+    --header 'Set-Cookie: ci_session=test; path=/; secure; HttpOnly' \
+    --body "$fixture" >/dev/null 2>&1 &
 /bin/caddy respond --listen 127.0.0.1:8639 --body admin >/dev/null 2>&1 &
 /bin/caddy run --config /source/rootfs/etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1 &
 
@@ -196,10 +220,22 @@ done
 
 [ "$(curl -fsS http://127.0.0.1:8080/)" = admin ]
 [ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1/__health)" = 200 ]
+curl -sS -D /tmp/localhost-headers -o /tmp/localhost-body http://127.0.0.1:8082/
+grep -qi '^Location: /login' /tmp/localhost-headers
+if grep -qi '^Set-Cookie:.*; *secure' /tmp/localhost-headers; then
+    echo "Localhost admin cookie is still marked secure" >&2
+    cat /tmp/localhost-headers >&2
+    exit 1
+fi
+if [ "$(cat /tmp/localhost-body)" != 'main /login /login' ]; then
+    echo "Localhost admin body was not rewritten" >&2
+    cat /tmp/localhost-body >&2
+    exit 1
+fi
 if [ "$CADDY_HTTPS_MODE_ENABLED" = true ]; then
     [ "$(curl -sS -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1/path)" = \
         "301 https://test.example/path" ]
 else
-    [ "$(curl -fsS http://127.0.0.1/)" = main ]
+    [ "$(curl -fsS http://127.0.0.1/)" = "$fixture" ]
 fi
 echo "Network mode $CADDY_HTTPS_MODE_ENABLED passed"

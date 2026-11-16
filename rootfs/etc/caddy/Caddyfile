@@ -11,6 +11,28 @@ http://:8080 {
     reverse_proxy 127.0.0.1:8639
 }
 
+# Loopback-only application manager for the host. The app builds absolute URLs
+# from DOMAIN, so make them root-relative for this listener and drop the Secure
+# cookie flag, which would otherwise prevent the session over plain HTTP.
+http://:8082 {
+    route {
+        header {
+            defer
+            Location "^https?://[^/]+(/.*)$" "$1"
+            Set-Cookie "(?i);\s*secure;\s*" "; "
+            Set-Cookie "(?i);\s*secure\s*$" ";"
+        }
+        replace {
+            "https://{file./var/environment/global-env/DOMAIN}/" "/"
+            "http://{file./var/environment/global-env/DOMAIN}/" "/"
+            # Some templates HTML-escape the scheme and separators.
+            "https&#x3A;&#x2F;&#x2F;{file./var/environment/global-env/DOMAIN}&#x2F;" "/"
+            "http&#x3A;&#x2F;&#x2F;{file./var/environment/global-env/DOMAIN}&#x2F;" "/"
+        }
+        reverse_proxy 127.0.0.1:90
+    }
+}
+
 http://:8443 {
     reverse_proxy 127.0.0.1:17180
 }
