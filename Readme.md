@@ -29,10 +29,6 @@ https://tailscale.com/download
 Anywherelan's admin panel is accessible on 127.0.0.1:8080 on the host computer. Nothing else is exposed.
 HTTPS is also disabled in this mode, because there is no way to get a trusted certificate for a local address.
 
-### Hardware safety
-
-If the hardware ever gets above 90% load, this stack will start shutting down other containers, starting with the biggest consumers.
-
 ### Configuration
 
 You need to create a file named `.env` in the root of the project. You can rename/copy the `release/env` file and use it as a base.
