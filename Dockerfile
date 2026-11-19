@@ -84,5 +84,5 @@ COPY --from=awl-build /awlroot/awl /usr/local/bin/awl
 COPY rootfs/ /
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run \
     && mkdir -p /config /var/lib/tailscale /var/log/tailscale /var/environment/global-env
-EXPOSE 80 443 22000/tcp 22000/udp
+EXPOSE 80 90 443 8080 8082 8443 22000/tcp 22000/udp
 ENTRYPOINT ["/init"]

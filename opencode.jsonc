@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "read", "resource": "*", "effect": "deny" },
+    { "action": "glob", "resource": "*", "effect": "deny" },
+    { "action": "grep", "resource": "*", "effect": "deny" },
+    { "action": "external_directory", "resource": "*", "effect": "deny" },
+    { "action": "shell", "resource": "*", "effect": "deny" }
+  ]
+}

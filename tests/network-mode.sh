@@ -10,6 +10,7 @@ if [ "${1:-}" != "--inside" ] && [ "${1:-}" != "--inside-awl" ] && [ "${1:-}" !=
             -v "$root:/source:ro" \
             -v "$root/rootfs/etc/s6-overlay/s6-rc.d/anywherelan-enabled:/etc/s6-overlay/s6-rc.d/anywherelan-enabled:ro" \
             -v "$root/rootfs/etc/s6-overlay/s6-rc.d/tailscale-enabled:/etc/s6-overlay/s6-rc.d/tailscale-enabled:ro" \
+            -v "$root/rootfs/etc/s6-overlay/s6-rc.d/domain-file:/etc/s6-overlay/s6-rc.d/domain-file:ro" \
             "$image" /source/tests/network-mode.sh --inside
     done
     docker run --rm --network none --cap-add NET_ADMIN --device /dev/net/tun \
@@ -20,7 +21,7 @@ if [ "${1:-}" != "--inside" ] && [ "${1:-}" != "--inside-awl" ] && [ "${1:-}" !=
     for mode in off on; do
         docker run --rm --network none --entrypoint /bin/sh -e TEST_MODE="$mode" \
             -v "$root:/source:ro" -v /var/run/docker.sock:/var/run/docker.sock:ro \
-            ghcr.io/frontrider/app-manager:0.0.7 /source/tests/network-mode.sh --inside-app
+            ghcr.io/frontrider/app-manager:0.0.15 /source/tests/network-mode.sh --inside-app
     done
     exit
 fi
@@ -28,16 +29,17 @@ fi
 PATH="/command:$PATH"
 export PATH
 if [ "$1" = "--inside-app" ]; then
+    domain=${TEST_DOMAIN:-local-host.awl}
     mkdir -p /var/environment/global-env
     printf '%s' "$TEST_MODE" > /var/environment/global-env/HTTPS_ENABLED
-    printf '%s' local-host.awl > /var/environment/global-env/DOMAIN
+    printf '%s' "$domain" > /var/environment/global-env/DOMAIN
     export DOMAIN_DIRECTORY=/var/environment/global-env APP_SCHEME=https cookie_secure=true
     export CADDY_PROXY_HOST=127.0.0.1 app_indexPage=
-    /bin/sh /source/rootfs/etc/app-manager-mode-entrypoint.sh php-fpm >/tmp/app.log 2>&1 &
+    app-manager-entrypoint php-fpm >/tmp/app.log 2>&1 &
     unset APP_SCHEME cookie_secure
     tries=0
     until SCRIPT_NAME=/index.php SCRIPT_FILENAME=/var/www/html/public/index.php REQUEST_METHOD=GET \
-        REQUEST_URI=/ SERVER_NAME=local-host.awl SERVER_PORT=80 HTTP_HOST=local-host.awl \
+        REQUEST_URI=/ SERVER_NAME="$domain" SERVER_PORT=80 HTTP_HOST="$domain" \
         HTTPS="$TEST_MODE" cgi-fcgi -bind -connect 127.0.0.1:9000 > /tmp/response 2>/dev/null; do
         tries=$((tries + 1))
         if [ "$tries" -ge 30 ]; then
@@ -47,7 +49,7 @@ if [ "$1" = "--inside-app" ]; then
         sleep 1
     done
     if [ "$TEST_MODE" = off ]; then
-        if ! grep -qi '^Location: http://local-host.awl/login' /tmp/response; then
+        if ! grep -qi "^Location: http://$domain/login" /tmp/response; then
             cat /tmp/response >&2
             exit 1
         fi
@@ -56,13 +58,13 @@ if [ "$1" = "--inside-app" ]; then
             exit 1
         fi
     else
-        if ! grep -qi '^Location: https://local-host.awl/login' /tmp/response; then
+        if ! grep -qi "^Location: https://$domain/login" /tmp/response; then
             cat /tmp/response >&2
             exit 1
         fi
         grep -qi '^Set-Cookie:.*; secure' /tmp/response
     fi
-    echo "App-manager mode $TEST_MODE passed"
+    echo "App-manager mode $TEST_MODE ($domain) passed"
     exit
 fi
 if [ "$1" = "--inside-auth" ]; then
@@ -238,4 +240,23 @@ if [ "$CADDY_HTTPS_MODE_ENABLED" = true ]; then
 else
     [ "$(curl -fsS http://127.0.0.1/)" = "$fixture" ]
 fi
+
+# A domain from the environment replaces both connectivity services.
+printf '%s' stale.example > /var/environment/global-env/domain
+printf '%s' direct.example:90 > /run/s6/container_environment/DOMAIN
+/command/execlineb -c "$(cat /source/rootfs/etc/s6-overlay/s6-rc.d/domain-file/up)"
+[ "$(cat /var/environment/global-env/DOMAIN)" = direct.example:90 ]
+[ ! -e /var/environment/global-env/domain ]
+printf '%s' 127.0.0.1:90 > /run/s6/container_environment/DOMAIN
+/command/execlineb -c "$(cat /source/rootfs/etc/s6-overlay/s6-rc.d/domain-file/up)"
+[ "$(cat /var/environment/global-env/DOMAIN)" = 127.0.0.1:90 ]
+for service in anywherelan-enabled tailscale-enabled; do
+    if /command/execlineb -c "$(cat "/source/rootfs/etc/s6-overlay/s6-rc.d/$service/up")"; then
+        echo "$service started with DOMAIN configured" >&2
+        exit 1
+    fi
+done
+rm -f /run/s6/container_environment/DOMAIN
+/command/execlineb -c "$(cat /source/rootfs/etc/s6-overlay/s6-rc.d/domain-file/up)"
+[ ! -e /var/environment/global-env/domain ]
 echo "Network mode $CADDY_HTTPS_MODE_ENABLED passed"

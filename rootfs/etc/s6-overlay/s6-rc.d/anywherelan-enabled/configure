@@ -1,5 +1,10 @@
 #!/bin/sh
 
+if [ -n "${DOMAIN:-}" ]; then
+    echo "DOMAIN is configured; skipping Anywherelan" >&2
+    exit 1
+fi
+
 if [ -n "${TS_AUTH_KEY:-}" ]; then
     echo "Tailscale auth key configured; skipping Anywherelan" >&2
     exit 1

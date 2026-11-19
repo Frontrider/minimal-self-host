@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# A domain supplied through the environment replaces the connectivity services.
+# They would otherwise publish their own address into the same file.
+#
+# Always remove the lowercase compatibility file written by older versions: it
+# dropped the configured port, which made services redirect to port 80.
+rm -f /var/environment/global-env/domain
+
+if [ -z "${DOMAIN:-}" ]; then
+    exit 0
+fi
+
+mkdir -p /var/environment/global-env
+printf '%s' "$DOMAIN" > /var/environment/global-env/DOMAIN.tmp
+mv /var/environment/global-env/DOMAIN.tmp /var/environment/global-env/DOMAIN

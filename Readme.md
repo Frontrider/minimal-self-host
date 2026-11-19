@@ -69,7 +69,6 @@ You can use this to navigate.
 
 For jellyfin, if you logged out manually, you can log back in by visiting the page again from the sidebar.
 
-
 # Future plans
 
 Syncthing covers *private* file sharing needs, but I want a public solution as well that could be used for community building.
