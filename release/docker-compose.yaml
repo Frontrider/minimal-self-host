@@ -138,9 +138,6 @@ services:
       APPS_DIR: /apps
       DOCKER_BIN: /usr/local/bin/docker
       DOCKER_HOST: unix:///var/run/docker.sock
-      # Passed to each app's own Compose library-setup service.
-      JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
-      KOMGA_API_KEY: "${KOMGA_API_KEY:-}"
     volumes:
       - type: bind
         # Startup grants PHP workers access to the socket's detected group.
