@@ -44,7 +44,7 @@ services:
       protected: "true"
       # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
       caddy: ':90'
-      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
+      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replacement handler cannot read gzip.
       caddy.7_replace.match.header: 'Content-Type text/html*'
       caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
       # The sidebar menu's app list comes live from service-manager, which renders it as an HTML fragment.

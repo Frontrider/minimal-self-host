@@ -1,6 +1,8 @@
 services:
   core:
-    image: ghcr.io/frontrider/minimal-self-host:latest
+    build:
+      context: .
+      target: core
     restart: always
     hostname: localhost
     environment:
@@ -16,11 +18,12 @@ services:
       # Must match core's internal network address for LDAP.
       CORE_INTERNAL_IP: 172.30.53.253
     ports:
-      - "80:80"
-      - "90:90"
-      - "8080:8080"
-      - "8082:8082"
-      - "8443:8443"
+      # Caddy's local listeners. Port 80 stays internal for the health check and
+      # the Tailscale redirect; port 90 is the application site.
+      - "127.0.0.1:90:90"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:8443:8443"
     devices:
       - /dev/net/tun:/dev/net/tun
     cap_add:
@@ -41,7 +44,7 @@ services:
       protected: "true"
       # The :90 site is generated from these labels, since tailscale serve forwards to it. Other containers add their own routes with the same :90 address.
       caddy: ':90'
-      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replace handler cannot read gzip.
+      # Injects a left slide-out menu into HTML responses. Upstreams are asked for uncompressed bodies because the replacement handler cannot read gzip.
       caddy.7_replace.match.header: 'Content-Type text/html*'
       caddy.7_replace: '"</body>" "{file./etc/caddy/menu.html}</body>"'
       # The sidebar menu's app list comes live from service-manager, which renders it as an HTML fragment.
@@ -74,7 +77,8 @@ services:
       - awl_state:/var/lib/awl
       - global_env:/var/environment/global-env
   app-manager:
-    image: ghcr.io/frontrider/app-manager:latest
+    image: ghcr.io/frontrider/app-manager:0.0.15
+    command: ["php-fpm"]
     depends_on:
       core:
         condition: service_healthy
@@ -133,9 +137,6 @@ services:
       ldap_timeout: "${LDAP_TIMEOUT:-5}"
       ldap_sessionLifetime: "${SESSION_LIFETIME:-3600}"
 
-      # singleton/<category>/<app>: one running app per category.
-      # standard categories have no exclusivity limit.
-      APPS_DIR: /apps
       DOCKER_BIN: /usr/local/bin/docker
       DOCKER_HOST: unix:///var/run/docker.sock
     volumes:
