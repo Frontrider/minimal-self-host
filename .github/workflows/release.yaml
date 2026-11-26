@@ -50,11 +50,29 @@ jobs:
             printf 'stable=true\n' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Validate Docker Hub configuration
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_REPOSITORY: ${{ vars.DOCKERHUB_REPOSITORY }}
+        run: |
+          if [ -z "$DOCKERHUB_USERNAME" ]; then
+            echo "Set the DOCKERHUB_USERNAME repository variable or secret." >&2
+            exit 1
+          fi
+          if [ -z "$DOCKERHUB_REPOSITORY" ]; then
+            echo "Set the DOCKERHUB_REPOSITORY repository variable to the Docker Hub repository name." >&2
+            exit 1
+          fi
+          if ! printf '%s' "$DOCKERHUB_REPOSITORY" | grep -Eq '^[a-z0-9]+([._-][a-z0-9]+)*$'; then
+            echo "DOCKERHUB_REPOSITORY must be a valid Docker Hub repository name: lowercase alphanumeric with '.', '_' or '-' separators." >&2
+            exit 1
+          fi
+
       - name: Extract Docker image metadata
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/local-host-app-manager
+          images: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}
           flavor: |
             latest=false
           tags: |
@@ -92,8 +110,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.version.outputs.version }}
-          IMAGE: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/local-host-core:${{ steps.meta.outputs.version }}
-          LATEST_IMAGE: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/local-host-core:latest
+          IMAGE: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}:${{ steps.meta.outputs.version }}
+          LATEST_IMAGE: ${{ vars.DOCKERHUB_USERNAME || secrets.DOCKERHUB_USERNAME }}/${{ vars.DOCKERHUB_REPOSITORY }}:latest
           DIGEST: ${{ steps.build.outputs.digest }}
           VERSION: ${{ steps.version.outputs.version }}
           STABLE: ${{ steps.version.outputs.stable }}
